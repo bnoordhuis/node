@@ -626,6 +626,7 @@ def uv_cmd(bld, variant):
     cmd += ' && if [[ -z "$NODE_MAKE" ]]; then NODE_MAKE=make; fi; $NODE_MAKE -C ' + sh_escape(blddir)
   else:
     cmd += ' && make -C ' + sh_escape(blddir)
+  cmd += ' BUILDTYPE=%s' % {'debug':'Debug', 'default':'Release'}[variant]
   return cmd
 
 
@@ -633,7 +634,6 @@ def build_uv(bld):
   uv = bld.new_task_gen(
     name = 'uv',
     source = 'deps/uv/include/uv.h',
-    target = 'deps/uv/uv.a',
     before = "cxx",
     rule = uv_cmd(bld, 'default')
   )
@@ -643,7 +643,8 @@ def build_uv(bld):
   uv.env.env['CXX'] = sh_escape(bld.env['CXX'][0])
   uv.env.env['CPPFLAGS'] = "-DPTW32_STATIC_LIB"
 
-  t = join(bld.srcnode.abspath(bld.env_of_name("default")), uv.target)
+  t = join(bld.srcnode.abspath(bld.env_of_name("default")),
+           'deps/uv/out/Release/obj.target/build/libuv.a')
   bld.env_of_name('default').append_value("LINKFLAGS_UV", t)
 
   if bld.env["USE_DEBUG"]:
@@ -652,7 +653,8 @@ def build_uv(bld):
     uv_debug.env.env = dict(os.environ)
     uv_debug.env.env['CPPFLAGS'] = "-DPTW32_STATIC_LIB"
 
-    t = join(bld.srcnode.abspath(bld.env_of_name("debug")), uv_debug.target)
+    t = join(bld.srcnode.abspath(bld.env_of_name("debug")),
+             'deps/uv/out/Debug/obj.target/build/libuv.a')
     bld.env_of_name('debug').append_value("LINKFLAGS_UV", t)
 
   bld.install_files('${PREFIX}/include/node/', 'deps/uv/include/*.h')
