@@ -348,6 +348,7 @@ int uv_tcp_connect6(uv_connect_t* req, uv_tcp_t* handle,
     struct sockaddr_in6 address, uv_connect_cb cb);
 
 int uv_getsockname(uv_tcp_t* handle, struct sockaddr* name, int* namelen);
+int uv_getpeername(uv_tcp_t* handle, struct sockaddr* name, int* namelen);
 
 
 /*

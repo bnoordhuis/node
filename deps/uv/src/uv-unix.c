@@ -1115,7 +1115,10 @@ out:
 }
 
 
-int uv_getsockname(uv_tcp_t* handle, struct sockaddr* name, int* namelen) {
+static int uv__getsockname(int (*sockfun)(int, struct sockaddr*, socklen_t*),
+                           uv_tcp_t* handle,
+                           struct sockaddr* name,
+                           int* namelen) {
   socklen_t socklen;
   int saved_errno;
 
@@ -1125,7 +1128,7 @@ int uv_getsockname(uv_tcp_t* handle, struct sockaddr* name, int* namelen) {
   /* sizeof(socklen_t) != sizeof(int) on some systems. */
   socklen = (socklen_t)*namelen;
 
-  if (getsockname(handle->fd, name, &socklen) == -1) {
+  if (sockfun(handle->fd, name, &socklen) == -1) {
     uv_err_new((uv_handle_t*)handle, errno);
   } else {
     *namelen = (int)socklen;
@@ -1133,6 +1136,16 @@ int uv_getsockname(uv_tcp_t* handle, struct sockaddr* name, int* namelen) {
 
   errno = saved_errno;
   return 0;
+}
+
+
+int uv_getsockname(uv_tcp_t* handle, struct sockaddr* name, int* namelen) {
+  return uv__getsockname(getsockname, handle, name, namelen);
+}
+
+
+int uv_getpeername(uv_tcp_t* handle, struct sockaddr* name, int* namelen) {
+  return uv__getsockname(getpeername, handle, name, namelen);
 }
 
 

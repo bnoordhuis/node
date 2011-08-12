@@ -54,6 +54,8 @@ static Persistent<String> port_symbol;
 
 typedef class ReqWrap<uv_connect_t> ConnectWrap;
 
+typedef int (*sockfun_t)(uv_tcp_t* handle, sockaddr* addr, int* addrlen);
+
 
 class TCPWrap : public StreamWrap {
  public:
@@ -81,7 +83,8 @@ class TCPWrap : public StreamWrap {
     NODE_SET_PROTOTYPE_METHOD(t, "connect", Connect);
     NODE_SET_PROTOTYPE_METHOD(t, "bind6", Bind6);
     NODE_SET_PROTOTYPE_METHOD(t, "connect6", Connect6);
-    NODE_SET_PROTOTYPE_METHOD(t, "getsockname", GetSockName);
+    NODE_SET_PROTOTYPE_METHOD(t, "getsockname", GetSockName<uv_getsockname>);
+    NODE_SET_PROTOTYPE_METHOD(t, "getpeername", GetSockName<uv_getpeername>);
 
     tcpConstructor = Persistent<Function>::New(t->GetFunction());
 
@@ -118,6 +121,7 @@ class TCPWrap : public StreamWrap {
     assert(object_.IsEmpty());
   }
 
+  template <sockfun_t SOCKFUN>
   static Handle<Value> GetSockName(const Arguments& args) {
     HandleScope scope;
     struct sockaddr address;
@@ -128,7 +132,7 @@ class TCPWrap : public StreamWrap {
     UNWRAP
 
     int namelen = sizeof(address);
-    int r = uv_getsockname(&wrap->handle_, &address, &namelen);
+    int r = SOCKFUN(&wrap->handle_, &address, &namelen);
 
     Local<Object> sockname = Object::New();
     if (r != 0) {

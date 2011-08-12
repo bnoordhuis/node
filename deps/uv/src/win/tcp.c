@@ -667,7 +667,10 @@ int uv_tcp_connect6(uv_connect_t* req, uv_tcp_t* handle,
 }
 
 
-int uv_getsockname(uv_tcp_t* handle, struct sockaddr* name, int* namelen) {
+static int uv__getsockname(int (*sockfun)(SOCKET, struct sockaddr*, int*),
+                           uv_tcp_t* handle,
+                           struct sockaddr* name,
+                           int* namelen) {
   int result;
 
   if (handle->flags & UV_HANDLE_SHUTTING) {
@@ -675,13 +678,23 @@ int uv_getsockname(uv_tcp_t* handle, struct sockaddr* name, int* namelen) {
     return -1;
   }
 
-  result = getsockname(handle->socket, name, namelen);
+  result = sockfun(handle->socket, name, namelen);
   if (result != 0) {
     uv_set_sys_error(WSAGetLastError());
     return -1;
   }
 
   return 0;
+}
+
+
+int uv_getsockname(uv_tcp_t* handle, struct sockaddr* name, int* namelen) {
+  return uv__getsockname(getsockname, handle, name, namelen);
+}
+
+
+int uv_getpeername(uv_tcp_t* handle, struct sockaddr* name, int* namelen) {
+  return uv__getsockname(getpeername, handle, name, namelen);
 }
 
 
