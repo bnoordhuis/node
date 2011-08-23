@@ -28,8 +28,11 @@
 
 /*
  * Threshold of active tcp streams for which to preallocate tcp read buffers.
+ * (Due to node slab allocator performing poorly under this pattern,
+ *  the optimization is temporarily disabled (threshold=0).  This will be
+ *  revisited once node allocator is improved.)
  */
-const unsigned int uv_active_tcp_streams_threshold = 50;
+const unsigned int uv_active_tcp_streams_threshold = 0;
 
 /* 
  * Number of simultaneous pending AcceptEx calls.
@@ -545,7 +548,7 @@ int uv_tcp_connect6(uv_connect_t* req, uv_tcp_t* handle,
 }
 
 
-int uv_getsockname(uv_tcp_t* handle, struct sockaddr* name, int* namelen) {
+int uv_getsockname(uv_handle_t* handle, struct sockaddr* name, int* namelen) {
   int result;
 
   if (handle->flags & UV_HANDLE_SHUTTING) {
