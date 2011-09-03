@@ -26,6 +26,15 @@ var common = require('../common');
 var assert = require('assert');
 var util = require('util');
 
+// exceptions should print the error message, not "{}"
+var ex;
+ex = util.inspect(new Error('FAIL'));
+assert.ok(ex.indexOf("[message]: 'FAIL'") != -1);
+ex = util.inspect(new TypeError('FAIL'));
+assert.ok(ex.indexOf("[message]: 'FAIL'") != -1);
+ex = util.inspect(new SyntaxError('FAIL'));
+assert.ok(ex.indexOf("[message]: 'FAIL'") != -1);
+
 // test the internal isDate implementation
 var Date2 = require('vm').runInNewContext('Date');
 var d = new Date2();
