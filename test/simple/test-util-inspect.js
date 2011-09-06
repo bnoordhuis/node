@@ -33,3 +33,11 @@ var orig = util.inspect(d);
 Date2.prototype.foo = 'bar';
 var after = util.inspect(d);
 assert.equal(orig, after);
+
+// .inspect() function that returns a non-string
+// should not trigger an exception
+// https://github.com/joyent/node/issues/410
+var o = {
+  inspect: function() {}
+};
+assert.equal(util.inspect(o), 'undefined');
