@@ -232,7 +232,10 @@
       } else if (binding.isStdoutBlocking()) {
         stdout = new fs.WriteStream(null, {fd: fd});
       } else {
-        stdout = new net.Stream(fd);
+        // net.Stream(fd) proxies process.stdout,
+        // don't call or you'll get unbounded recursion
+//        stdout = new net.Stream(fd);
+        stdout = new tty.WriteStream(fd);
         // FIXME Should probably have an option in net.Stream to create a
         // stream from an existing fd which is writable only. But for now
         // we'll just add this hack and set the `readable` member to false.
@@ -263,7 +266,10 @@
       } else if (binding.isStdinBlocking()) {
         stdin = new fs.ReadStream(null, {fd: fd});
       } else {
-        stdin = new net.Stream(fd);
+        // net.Stream(fd) proxies process.stdin,
+        // don't call or you'll get unbounded recursion
+//        stdin = new net.Stream(fd);
+        stdin = new tty.ReadStream(fd);
         stdin.readable = true;
       }
 
