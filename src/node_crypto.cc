@@ -4054,14 +4054,8 @@ void RandomBytesWork(uv_work_t* work_req) {
 }
 
 
-template <RandomBytesGenerator generator>
-void RandomBytesAfter(uv_work_t* work_req) {
-  RandomBytesRequest* req =
-      container_of(work_req, RandomBytesRequest, work_req_);
-
+void RandomBytesCheck(RandomBytesRequest* req, Handle<Value> argv[2]) {
   HandleScope scope;
-
-  Handle<Value> argv[2];
 
   if (req->error_) {
     char errmsg[256] = "Operation not supported";
@@ -4078,12 +4072,21 @@ void RandomBytesAfter(uv_work_t* work_req) {
     argv[0] = Null();
     argv[1] = buffer->handle_;
   }
+}
 
+
+template <RandomBytesGenerator generator>
+void RandomBytesAfter(uv_work_t* work_req) {
+  RandomBytesRequest* req =
+      container_of(work_req, RandomBytesRequest, work_req_);
+
+  HandleScope scope;
+  Handle<Value> argv[2];
+  RandomBytesCheck(req, argv);
   Persistent<Function> callback = req->callback_;
   delete req;
 
   TryCatch tc;
-
   callback->Call(Context::GetCurrent()->Global(), 2, argv);
 
   if (tc.HasCaught())
@@ -4102,26 +4105,35 @@ Handle<Value> RandomBytes(const Arguments& args) {
     return ThrowException(Exception::TypeError(s));
   }
 
-  if (!args[1]->IsFunction()) {
-    Local<String> s = String::New("Argument #2 must be function");
-    return ThrowException(Exception::TypeError(s));
-  }
-
   const size_t size = args[0]->Uint32Value();
-  Local<Function> callback_v = Local<Function>(Function::Cast(*args[1]));
 
   RandomBytesRequest* req = new RandomBytesRequest();
-  req->callback_ = Persistent<Function>::New(callback_v);
   req->error_ = 0;
   req->data_ = new char[size];
   req->size_ = size;
 
-  uv_queue_work(uv_default_loop(),
-                &req->work_req_,
-                RandomBytesWork<generator>,
-                RandomBytesAfter<generator>);
+  if (args[1]->IsFunction()) {
+    Local<Function> callback_v = Local<Function>(Function::Cast(*args[1]));
+    req->callback_ = Persistent<Function>::New(callback_v);
 
-  return Undefined();
+    uv_queue_work(uv_default_loop(),
+                  &req->work_req_,
+                  RandomBytesWork<generator>,
+                  RandomBytesAfter<generator>);
+
+    return Undefined();
+  }
+  else {
+    Handle<Value> argv[2];
+    RandomBytesWork<generator>(&req->work_req_);
+    RandomBytesCheck(req, argv);
+    delete req;
+
+    if (!argv[0]->IsNull())
+      return ThrowException(argv[0]);
+    else
+      return argv[1];
+  }
 }
 
 
