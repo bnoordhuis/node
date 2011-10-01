@@ -72,16 +72,17 @@ Then once the debugger is run, it will break on line 4.
 
 The `repl` command allows you to evaluate code remotely. The `next` command
 steps over to the next line. There are a few other commands available and more
-to come type `help` to see others.
+to come. Type `help` to see others.
 
 ### Watchers
 
-You can watch expression and variable values while debugging your code. On every
-breakpoint each expression from watchers list will be evaluated in current
-context and displayed just before breakpoint's source code listing.
+You can watch expression and variable values while debugging your code.
+On every breakpoint each expression from the watchers list will be evaluated
+in the current context and displayed just before the breakpoint's source code
+listing.
 
-To start watching expression type `watch("my_expression")`, to get watchers'
-values use `watchers` and to finally remove watcher call
+To start watching an expression, type `watch("my_expression")`. `watchers`
+prints the active watchers. To remove a watcher, type
 `unwatch("my_expression")`.
 
 ### Commands reference
