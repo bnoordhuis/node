@@ -23,22 +23,42 @@ var NUM_CLIENTS = 100;
 var NUM_REQUESTS = 500; // # requests per client
 
 var http = require('http');
+var net = require('net');
 
-var body = Buffer("Hello, node.js world.\n");
+var body = "Hello, node.js world.\n";
 
 var headers = {
   'Content-Type': 'text/plain',
   'Content-Length': '' + body.length
 };
 
+var response = Buffer(
+  "HTTP/1.0 200 OK\r\n" +
+  "Content-Type: text/plain\r\n" +
+  "Content-Length: " + body.length + "\r\n" +
+  "\r\n" +
+  body);
+
+var response_slices = [];
+for (var n = 0; n < response.length; n += 8) {
+  response_slices.push(response.slice(n, Math.min(n + 8, response.length)));
+}
+
 var activeClients = 0;
 var requestsCompleted = 0;
 var startTime = 0;
 
-var server = http.createServer(function(req, res) {
-  res.writeHead(200, headers);
-  res.write(body);
-  res.end();
+var server = net.createServer(function(conn) {
+  var i = 0, n = response_slices.length;
+
+  function write() {
+    if (i < n)
+      conn.write(response_slices[i++], write);
+    else
+      conn.destroy();
+  }
+
+  write();
 });
 
 var options = {
