@@ -51,6 +51,15 @@
   'targets': [
     {
       'target_name': 'node',
+      'type': 'none',
+      'dependencies': [
+        'node_base',
+        'node_dtrace',
+      ],
+    },
+
+    {
+      'target_name': 'node_base',
       'type': 'executable',
 
       'dependencies': [
@@ -139,12 +148,14 @@
         }],
 
         [ 'node_use_dtrace=="true"', {
+          'defines': [ 'HAVE_DTRACE=1' ],
           'sources': [
+            '<(SHARED_INTERMEDIATE_DIR)/node_provider.h',
             'src/node_dtrace.cc',
             'src/node_dtrace.h',
-            # why does node_provider.h get generated into src and not
-            # SHARED_INTERMEDIATE_DIR?
-            'src/node_provider.h',
+          ],
+          'libraries': [
+            '<(SHARED_INTERMEDIATE_DIR)/node_provider.o',
           ],
         }],
 
@@ -245,6 +256,32 @@
         },
       ],
     }, # end node_js2c
+
+    {
+      'target_name': 'node_dtrace',
+      'type': 'none',
+      'conditions': [
+        [ 'node_use_dtrace=="true"', {
+          'actions': [
+            {
+              'action_name': 'node_dtrace_provider_h',
+              'outputs': [ '<(SHARED_INTERMEDIATE_DIR)/node_provider.h' ],
+              'inputs': [ 'src/node_provider.d' ],
+              'action': [ 'dtrace', '-h', '-x', 'nolibs', '-s', '<@(_inputs)', '-o', '<@(_outputs)' ],
+            },
+            {
+              'action_name': 'node_dtrace_provider_o',
+              'outputs': [ '<(SHARED_INTERMEDIATE_DIR)/node_provider.o' ],
+              'inputs': [ 'src/node_provider.d' ],\
+              # gyp doesn't have a list of target object files available at this point
+              # so we fall back to this horrible, horrible hack... note that it only works
+              # with the makefile generator but that's acceptable
+              'action': [ 'sh', '-c', 'dtrace -G -x nolibs -s <@(_inputs) -o <@(_outputs) $(OBJS)' ],
+            },
+          ],
+        }]
+      ]
+    }, # end node_dtrace
   ] # end targets
 }
 
