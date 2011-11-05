@@ -19,16 +19,16 @@ var server = http.createServer(function (req, res) {
     "Content-Length": body.length
   });
   res.write(body);
-  res.close();
+  res.end();
 })
-server.listen(port);
+server.listen(port, '127.0.0.1');
 
 function responseListener (res) {
-  res.addListener("end", function () {
+  res.on("end", function () {
     if (requests < n) {
       var req = res.client.request("/");
-      req.addListener('response', responseListener);
-      req.close();
+      req.on('response', responseListener);
+      req.end();
       requests++;
     }
 
@@ -39,10 +39,14 @@ function responseListener (res) {
 }
 
 for (var i = 0; i < concurrency; i++) {
-  var client = http.createClient(port);
+  var client = http.createClient(port, '127.0.0.1');
   client.id = i;
   var req = client.request("/");
-  req.addListener('response', responseListener);
-  req.close();
+  req.on('response', responseListener);
+  req.end();
   requests++;
 }
+
+process.on('exit', function ()  {
+  console.log('%d requests seen', requests);
+});
