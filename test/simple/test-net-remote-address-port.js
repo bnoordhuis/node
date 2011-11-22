@@ -15,12 +15,13 @@ var server = net.createServer(function(socket) {
   });
 });
 
-server.listen(common.PORT, 'localhost', function() {
-  var client = net.createConnection(common.PORT, 'localhost');
+server.listen(common.PORT, '127.0.0.1', function() {
+  var client = net.createConnection(common.PORT, '127.0.0.1');
   var client2 = net.createConnection(common.PORT);
   client.on('connect', function() {
     assert.equal('127.0.0.1', client.remoteAddress);
     assert.equal(common.PORT, client.remotePort);
+    assert.equal('127.0.0.1', client.address().address); // local address
     client.end();
   });
   client2.on('connect', function() {
