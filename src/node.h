@@ -22,6 +22,30 @@
 #ifndef SRC_NODE_H_
 #define SRC_NODE_H_
 
+#if 1
+# include <stddef.h>
+extern "C" {
+void *jemalloc_malloc(size_t size);
+void *jemalloc_calloc(size_t number, size_t size);
+void *jemalloc_realloc(void *ptr, size_t size);
+void jemalloc_free(void *ptr);
+}
+
+inline void* operator new(size_t size)
+{
+  return jemalloc_malloc(size);
+}
+inline void operator delete(void* ptr, size_t size)
+{
+  jemalloc_free(ptr);
+}
+
+# define malloc(size) jemalloc_malloc(size)
+# define calloc(nmemb, size) jemalloc_calloc(nmemb, size)
+# define realloc(ptr, size) jemalloc_realloc(ptr, size)
+# define free(ptr) jemalloc_free(ptr)
+#endif
+
 #ifdef _WIN32
 # ifndef BUILDING_NODE_EXTENSION
 #   define NODE_EXTERN __declspec(dllexport)

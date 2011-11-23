@@ -178,6 +178,7 @@
         [ 'OS=="linux"', {
           'sources': [ 'src/platform_linux.cc' ],
           'libraries': [
+            '/home/bnoordhuis/src/nodejs/node/deps/jemalloc/lib/libjemalloc.a',
             '-ldl',
             '-lutil' # needed for openpty
           ],
