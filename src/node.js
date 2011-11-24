@@ -223,8 +223,9 @@
     var tty_wrap = process.binding('tty_wrap');
 
     // Note stream._type is used for test-module-load-list.js
+    var type = tty_wrap.guessHandleType(fd);
 
-    switch (tty_wrap.guessHandleType(fd)) {
+    switch (type) {
       case 'TTY':
         var tty = NativeModule.require('tty');
         stream = new tty.WriteStream(fd);
@@ -238,26 +239,19 @@
         break;
 
       case 'FILE':
+      case 'PIPE':
         var fs = NativeModule.require('fs');
         stream = new fs.SyncWriteStream(fd);
-        stream._type = 'fs';
-        break;
 
-      case 'PIPE':
-        var net = NativeModule.require('net');
-        stream = new net.Stream(fd);
-
-        // FIXME Should probably have an option in net.Stream to create a
-        // stream from an existing fd which is writable only. But for now
-        // we'll just add this hack and set the `readable` member to false.
-        // Test: ./node test/fixtures/echo.js < /etc/passwd
-        stream.readable = false;
-        stream._type = 'pipe';
-
-        // FIXME Hack to have stream not keep the event loop alive.
-        // See https://github.com/joyent/node/issues/1726
-        if (stream._handle && stream._handle.unref) {
-          stream._handle.unref();
+        if (type == 'FILE') {
+          stream._type = 'fs';
+        } else {
+          // FIXME Should probably have an option in net.Stream to create a
+          // stream from an existing fd which is writable only. But for now
+          // we'll just add this hack and set the `readable` member to false.
+          // Test: ./node test/fixtures/echo.js < /etc/passwd
+          stream.readable = false;
+          stream._type = 'pipe';
         }
         break;
 
