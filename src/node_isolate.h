@@ -66,7 +66,10 @@ public:
    */
   void AtExit(AtExitCallback callback, void *arg);
 
-  /* Shutdown the isolate. Call this method at thread death. */
+  /* Shutdown the isolate. Call this method at thread death.
+   * Calling any methods on the Isolate after Dispose() has
+   * run will result in undefined behaviour.
+   */
   void Dispose();
 
 private:

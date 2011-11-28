@@ -20,6 +20,7 @@
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "node_isolate.h"
+#include "v8.h"
 
 #include <stdlib.h>
 #include <string.h>

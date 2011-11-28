@@ -99,51 +99,129 @@ extern char **environ;
 
 namespace node {
 
-static Persistent<Object> process;
+#if HAVE_ISOLATES
 
-static Persistent<String> errno_symbol;
-static Persistent<String> syscall_symbol;
-static Persistent<String> errpath_symbol;
-static Persistent<String> code_symbol;
+# define TLS(type, name)    __thread type* __tls_##name
+# define VAR(name)          (*__tls_##name)
+# define EMPTY(name)        (__tls_##name == NULL)
 
-static Persistent<String> rss_symbol;
-static Persistent<String> heap_total_symbol;
-static Persistent<String> heap_used_symbol;
+# define NODE_PPSYMBOL(s) \
+  P(NODE_PSYMBOL(s))
 
-static Persistent<String> listeners_symbol;
-static Persistent<String> uncaught_exception_symbol;
-static Persistent<String> emit_symbol;
+# define ASSIGN(name, val) \
+  ((__tls_##name) = P(val))
 
+# define LAZY_ASSIGN(name, val) \
+  do if (!__tls_##name) ((__tls_##name) = P(val)); while (0)
 
-static char *eval_string = NULL;
-static int option_end_index = 0;
-static bool use_debug_agent = false;
-static bool debug_wait_connect = false;
-static int debug_port=5858;
-static int max_stack_size = 0;
+template <class T> v8::Persistent<T>* P(v8::Handle<T> v)
+{
+  return new v8::Persistent<T>(v8::Persistent<T>::New(v));
+}
 
-static uv_check_t check_tick_watcher;
-static uv_prepare_t prepare_tick_watcher;
-static uv_idle_t tick_spinner;
-static bool need_tick_cb;
-static Persistent<String> tick_callback_sym;
+v8::Persistent<v8::String>* P(const char* symbol)
+{
+  return new v8::Persistent<String>(
+    v8::Persistent<String>::New(
+      String::NewSymbol(symbol)));
+}
 
+#else /* !HAVE_ISOLATES */
+
+# define TLS(type, name)  type name
+# define VAR(name)        (name)
+# define EMPTY(name)      ((name).IsEmpty())
+
+# define NODE_PPSYMBOL(s) \
+  NODE_PSYMBOL(s)
+
+# define ASSIGN(name, val) \
+  ((name) = P(val))
+
+# define LAZY_ASSIGN(name, val) \
+  do if ((name).IsEmpty()) (name) = P(val); while (0)
+
+template <class T> v8::Persistent<T> P(v8::Handle<T> v)
+{
+  return v8::Persistent<T>(v);
+}
+
+v8::Persistent<v8::String> P(const char* symbol)
+{
+  return v8::Persistent<String>::New(String::NewSymbol(symbol));
+}
+
+#endif /* HAVE_ISOLATES */
+
+static TLS(Persistent<Object>, process);
+#define process VAR(process)
+
+static TLS(Persistent<String>, errno_symbol);
+#define errno_symbol VAR(errno_symbol)
+
+static TLS(Persistent<String>, syscall_symbol);
+#define syscall_symbol VAR(syscall_symbol)
+
+static TLS(Persistent<String>, errpath_symbol);
+#define errpath_symbol VAR(errpath_symbol)
+
+static TLS(Persistent<String>, code_symbol);
+#define code_symbol VAR(code_symbol)
+
+static TLS(Persistent<String>, rss_symbol);
+#define rss_symbol VAR(rss_symbol)
+
+static TLS(Persistent<String>, heap_total_symbol);
+#define heap_total_symbol VAR(heap_total_symbol)
+
+static TLS(Persistent<String>, heap_used_symbol);
+#define heap_used_symbol VAR(heap_used_symbol)
+
+static TLS(Persistent<String>, listeners_symbol);
+#define listeners_symbol VAR(listeners_symbol)
+
+static TLS(Persistent<String>, uncaught_exception_symbol);
+#define uncaught_exception_symbol VAR(uncaught_exception_symbol)
+
+static TLS(Persistent<String>, emit_symbol);
+#define emit_symbol VAR(emit_symbol)
+
+static TLS(Persistent<String>, tick_callback_sym);
+#define tick_callback_sym VAR(tick_callback_sym)
+
+static TLS(Persistent<Object>, binding_cache);
+#define binding_cache VAR(binding_cache)
+
+static TLS(Persistent<Array>, module_load_list);
+#define module_load_list VAR(module_load_list)
+
+static __thread char *eval_string = NULL;
+static __thread int option_end_index = 0;
+static __thread bool use_debug_agent = false;
+static __thread bool debug_wait_connect = false;
+static __thread int debug_port=5858;
+static __thread int max_stack_size = 0;
+
+static __thread uv_check_t check_tick_watcher;
+static __thread uv_prepare_t prepare_tick_watcher;
+static __thread uv_idle_t tick_spinner;
+static __thread bool need_tick_cb;
 
 #ifdef OPENSSL_NPN_NEGOTIATED
-static bool use_npn = true;
+static __thread bool use_npn = true;
 #else
-static bool use_npn = false;
+static __thread bool use_npn = false;
 #endif
 
 #ifdef SSL_CTRL_SET_TLSEXT_SERVERNAME_CB
-static bool use_sni = true;
+static __thread bool use_sni = true;
 #else
-static bool use_sni = false;
+static __thread bool use_sni = false;
 #endif
 
 // Buffer for getpwnam_r(), getgrpam_r() and other misc callers; keep this
 // scoped at file-level rather than method-level to avoid excess stack usage.
-static char getbuf[PATH_MAX + 1];
+static __thread char getbuf[PATH_MAX + 1];
 
 // We need to notify V8 when we're idle so that it can run the garbage
 // collector. The interface to this is V8::IdleNotification(). It returns
@@ -152,18 +230,18 @@ static char getbuf[PATH_MAX + 1];
 //
 // A rather convoluted algorithm has been devised to determine when Node is
 // idle. You'll have to figure it out for yourself.
-static uv_check_t gc_check;
-static uv_idle_t gc_idle;
-static uv_timer_t gc_timer;
-bool need_gc;
+static __thread uv_check_t gc_check;
+static __thread uv_idle_t gc_idle;
+static __thread uv_timer_t gc_timer;
+bool __thread need_gc;
 
 
 #define FAST_TICK 700.
 #define GC_WAIT_TIME 5000.
 #define RPM_SAMPLES 100
 #define TICK_TIME(n) tick_times[(tick_time_head - (n)) % RPM_SAMPLES]
-static int64_t tick_times[RPM_SAMPLES];
-static int tick_time_head;
+static __thread int64_t tick_times[RPM_SAMPLES];
+static __thread int tick_time_head;
 
 static void CheckStatus(uv_timer_t* watcher, int status);
 
@@ -228,11 +306,7 @@ static void Tick(void) {
 
   HandleScope scope;
 
-  if (tick_callback_sym.IsEmpty()) {
-    // Lazily set the symbol
-    tick_callback_sym =
-      Persistent<String>::New(String::NewSymbol("_tickCallback"));
-  }
+  LAZY_ASSIGN(tick_callback_sym, "_tickCallback");
 
   Local<Value> cb_v = process->Get(tick_callback_sym);
   if (!cb_v->IsFunction()) return;
@@ -773,11 +847,11 @@ Local<Value> ErrnoException(int errorno,
   Local<String> cons1 = String::Concat(estring, String::NewSymbol(", "));
   Local<String> cons2 = String::Concat(cons1, message);
 
-  if (syscall_symbol.IsEmpty()) {
-    syscall_symbol = NODE_PSYMBOL("syscall");
-    errno_symbol = NODE_PSYMBOL("errno");
-    errpath_symbol = NODE_PSYMBOL("path");
-    code_symbol = NODE_PSYMBOL("code");
+  if (EMPTY(syscall_symbol)) {
+    ASSIGN(syscall_symbol, "syscall");
+    ASSIGN(errno_symbol, "errno");
+    ASSIGN(errpath_symbol, "path");
+    ASSIGN(code_symbol, "code");
   }
 
   if (path) {
@@ -889,9 +963,7 @@ void MakeCallback(Handle<Object> object,
 void SetErrno(uv_err_t err) {
   HandleScope scope;
 
-  if (errno_symbol.IsEmpty()) {
-    errno_symbol = NODE_PSYMBOL("errno");
-  }
+  LAZY_ASSIGN(errno_symbol, "errno");
 
   if (err.code == UV_UNKNOWN) {
     char errno_buf[100];
@@ -1478,10 +1550,10 @@ v8::Handle<v8::Value> MemoryUsage(const v8::Arguments& args) {
 
   Local<Object> info = Object::New();
 
-  if (rss_symbol.IsEmpty()) {
-    rss_symbol = NODE_PSYMBOL("rss");
-    heap_total_symbol = NODE_PSYMBOL("heapTotal");
-    heap_used_symbol = NODE_PSYMBOL("heapUsed");
+  if (EMPTY(rss_symbol)) {
+    ASSIGN(rss_symbol, "rss");
+    ASSIGN(heap_total_symbol, "heapTotal");
+    ASSIGN(heap_used_symbol, "heapUsed");
   }
 
   info->Set(rss_symbol, Integer::NewFromUnsigned(rss));
@@ -1625,7 +1697,7 @@ static void OnFatalError(const char* location, const char* message) {
   exit(1);
 }
 
-static int uncaught_exception_counter = 0;
+static __thread int uncaught_exception_counter = 0;
 
 void FatalException(TryCatch &try_catch) {
   HandleScope scope;
@@ -1636,10 +1708,10 @@ void FatalException(TryCatch &try_catch) {
     exit(1);
   }
 
-  if (listeners_symbol.IsEmpty()) {
-    listeners_symbol = NODE_PSYMBOL("listeners");
-    uncaught_exception_symbol = NODE_PSYMBOL("uncaughtException");
-    emit_symbol = NODE_PSYMBOL("emit");
+  if (EMPTY(listeners_symbol)) {
+    ASSIGN(listeners_symbol, "listeners");
+    ASSIGN(uncaught_exception_symbol, "uncaughtException");
+    ASSIGN(emit_symbol, "emit");
   }
 
   Local<Value> listeners_v = process->Get(listeners_symbol);
@@ -1678,7 +1750,7 @@ void FatalException(TryCatch &try_catch) {
 }
 
 
-static uv_async_t debug_watcher;
+static __thread uv_async_t debug_watcher;
 
 static void DebugMessageCallback(uv_async_t* watcher, int status) {
   HandleScope scope;
@@ -1702,9 +1774,6 @@ static void DebugBreakMessageHandler(const Debug::Message& message) {
 }
 
 
-Persistent<Object> binding_cache;
-Persistent<Array> module_load_list;
-
 static Handle<Value> Binding(const Arguments& args) {
   HandleScope scope;
 
@@ -1712,9 +1781,7 @@ static Handle<Value> Binding(const Arguments& args) {
   String::Utf8Value module_v(module);
   node_module_struct* modp;
 
-  if (binding_cache.IsEmpty()) {
-    binding_cache = Persistent<Object>::New(Object::New());
-  }
+  LAZY_ASSIGN(binding_cache, Object::New());
 
   Local<Object> exports;
 
@@ -1760,9 +1827,38 @@ static Handle<Value> Binding(const Arguments& args) {
 }
 
 
+static Handle<Value> Print(const Arguments& args) {
+  for (int i = 0; args[i]->IsString(); ++i) {
+    String::Utf8Value s(args[i]);
+    write(1, *s, s.length());
+  }
+  write(1, "\n", 1);
+  return Undefined();
+}
+
+
 static void RunIsolate(void* arg) {
   uv_loop_t* loop = uv_loop_new();
   Isolate* isolate = Isolate::New(loop);
+
+  HandleScope scope;
+
+  Persistent<Context> context = Context::New();
+  Context::Scope context_scope(context);
+
+  Local<Object> global = context->Global();
+  NODE_SET_METHOD(global, "print", Print);
+
+  char *argv[] = { "node", "tmp/empty.js", NULL }; // FIXME
+
+  Handle<Object> process_object = SetupProcessObject(ARRAY_SIZE(argv) - 1, argv);
+//  v8_typed_array::AttachBindings(global); // FIXME
+
+  // Create all the objects, load modules, do everything.
+  // so your next reading stop should be node::Load()!
+  Load(process_object);
+
+  context.Dispose();
 }
 
 
@@ -1948,12 +2044,11 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
 
   Local<FunctionTemplate> process_template = FunctionTemplate::New();
 
-  process = Persistent<Object>::New(process_template->GetFunction()->NewInstance());
-
+  ASSIGN(process, process_template->GetFunction()->NewInstance());
 
   process->SetAccessor(String::New("title"),
-                       ProcessTitleGetter,
-                       ProcessTitleSetter);
+                          ProcessTitleGetter,
+                          ProcessTitleSetter);
 
   // process.version
   process->Set(String::NewSymbol("version"), String::New(NODE_VERSION));
@@ -1964,7 +2059,7 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
 #endif
 
   // process.moduleLoadList
-  module_load_list = Persistent<Array>::New(Array::New());
+  ASSIGN(module_load_list, Array::New());
   process->Set(String::NewSymbol("moduleLoadList"), module_load_list);
 
   Local<Object> versions = Object::New();
@@ -2091,7 +2186,7 @@ static void SignalExit(int signal) {
 }
 
 
-void Load(Handle<Object> process) {
+void Load(Handle<Object> process_object) {
   // Compile, execute the src/node.js file. (Which was included as static C
   // string in node_natives.h. 'natve_node' is the string containing that
   // source code.)
@@ -2121,7 +2216,7 @@ void Load(Handle<Object> process) {
 
   // Add a reference to the global object
   Local<Object> global = v8::Context::GetCurrent()->Global();
-  Local<Value> args[1] = { Local<Value>::New(process) };
+  Local<Value> args[1] = { Local<Value>::New(process_object) };
 
 #ifdef HAVE_DTRACE
   InitDTrace(global);
@@ -2564,14 +2659,14 @@ char** Init(int argc, char *argv[]) {
 }
 
 
-void EmitExit(v8::Handle<v8::Object> process) {
+void EmitExit(v8::Handle<v8::Object> process_object) {
   // process.emit('exit')
   Local<Value> emit_v = process->Get(String::New("emit"));
   assert(emit_v->IsFunction());
   Local<Function> emit = Local<Function>::Cast(emit_v);
   Local<Value> args[] = { String::New("exit") };
   TryCatch try_catch;
-  emit->Call(process, 1, args);
+  emit->Call(process_object, 1, args);
   if (try_catch.HasCaught()) {
     FatalException(try_catch);
   }
@@ -2592,12 +2687,12 @@ int Start(int argc, char *argv[]) {
   // Create the main node::Isolate object
   Isolate* isolate = Isolate::New(uv_default_loop());
 
-  Handle<Object> process = SetupProcessObject(argc, argv);
+  Handle<Object> process_object = SetupProcessObject(argc, argv);
   v8_typed_array::AttachBindings(context->Global());
 
   // Create all the objects, load modules, do everything.
   // so your next reading stop should be node::Load()!
-  Load(process);
+  Load(process_object);
 
   // All our arguments are loaded. We've evaluated all of the scripts. We
   // might even have created TCP servers. Now we enter the main eventloop. If
@@ -2606,7 +2701,7 @@ int Start(int argc, char *argv[]) {
   // watchers, it blocks.
   uv_run(NODE_LOOP());
 
-  EmitExit(process);
+  EmitExit(process_object);
 
   isolate->Dispose();
 
