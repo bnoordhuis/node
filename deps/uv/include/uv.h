@@ -125,22 +125,30 @@ typedef enum {
 } uv_err_code;
 #undef UV_ERRNO_GEN
 
+
+#define UV_HANDLE_TYPE_MAP(XX) \
+  XX(UV_UNKNOWN_HANDLE) \
+  XX(UV_TCP) \
+  XX(UV_UDP) \
+  XX(UV_NAMED_PIPE) \
+  XX(UV_TTY) \
+  XX(UV_FILE) \
+  XX(UV_TIMER) \
+  XX(UV_PREPARE) \
+  XX(UV_CHECK) \
+  XX(UV_IDLE) \
+  XX(UV_ASYNC) \
+  XX(UV_ARES_TASK) \
+  XX(UV_ARES_EVENT) \
+  XX(UV_PROCESS) \
+  XX(UV_FS_EVENT)
+
+
 typedef enum {
-  UV_UNKNOWN_HANDLE = 0,
-  UV_TCP,
-  UV_UDP,
-  UV_NAMED_PIPE,
-  UV_TTY,
-  UV_FILE,
-  UV_TIMER,
-  UV_PREPARE,
-  UV_CHECK,
-  UV_IDLE,
-  UV_ASYNC,
-  UV_ARES_TASK,
-  UV_ARES_EVENT,
-  UV_PROCESS,
-  UV_FS_EVENT
+#define XX(v) v,
+  UV_HANDLE_TYPE_MAP(XX)
+#undef XX
+  UV_MAX_HANDLE_TYPES
 } uv_handle_type;
 
 typedef enum {
@@ -1253,6 +1261,14 @@ UV_EXTERN uv_err_t uv_dlclose(uv_lib_t library);
  * Retrieves a data pointer from a dynamic library.
  */
 UV_EXTERN uv_err_t uv_dlsym(uv_lib_t library, const char* name, void** ptr);
+
+
+/*
+ * Debugging tools.
+ */
+UV_EXTERN const char* uv_handle_typename(uv_handle_t* handle);
+UV_EXTERN void uv_loop_walk(
+    uv_loop_t* loop, void (*cb)(uv_handle_t* handle, void* arg), void *arg);
 
 
 /* the presence of these unions force similar struct layout */

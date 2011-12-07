@@ -162,6 +162,7 @@ uv_loop_t* uv_loop_new(void) {
   uv_loop_t* loop = calloc(1, sizeof(uv_loop_t));
   loop->ev = ev_loop_new(0);
   ev_set_userdata(loop->ev, loop);
+  uv__handle_queue_init(loop);
   return loop;
 }
 
@@ -190,6 +191,7 @@ uv_loop_t* uv_default_loop(void) {
     default_loop_struct.ev = ev_default_loop(EVFLAG_AUTO);
 #endif
     ev_set_userdata(default_loop_struct.ev, default_loop_ptr);
+    uv__handle_queue_init(default_loop_ptr);
   }
   assert(default_loop_ptr->ev == EV_DEFAULT_UC);
   return default_loop_ptr;
@@ -212,6 +214,7 @@ void uv__handle_init(uv_loop_t* loop, uv_handle_t* handle,
 
   ev_init(&handle->next_watcher, uv__next);
   handle->next_watcher.data = handle;
+  uv__handle_queue_insert(handle);
 
   /* Ref the loop until this handle is closed. See uv__finish_close. */
   ev_ref(loop->ev);
@@ -274,6 +277,7 @@ void uv__finish_close(uv_handle_t* handle) {
       break;
   }
 
+  uv__handle_queue_remove(handle);
   ev_idle_stop(loop->ev, &handle->next_watcher);
 
   if (handle->close_cb) {

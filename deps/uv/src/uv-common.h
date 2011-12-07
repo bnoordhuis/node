@@ -29,6 +29,12 @@
 
 #include "uv.h"
 
+#if __GNUC__ || _MSC_VER
+# define inline __inline
+#elif __MSVC__
+# define inline
+#endif
+
 #define COUNTOF(a) (sizeof(a) / sizeof(a[0]))
 
 
@@ -72,6 +78,29 @@ int uv__tcp_connect6(uv_connect_t* req,
                     uv_tcp_t* handle,
                     struct sockaddr_in6 address,
                     uv_connect_cb cb);
+
+
+inline static void uv__handle_queue_init(uv_loop_t* loop) {
+  ngx_queue_init(&loop->handle_queue);
+}
+
+inline static void uv__handle_queue_insert(uv_handle_t* handle) {
+  ngx_queue_insert_head(&handle->loop->handle_queue, &handle->handle_queue);
+}
+
+inline static void uv__handle_queue_remove(uv_handle_t* handle) {
+  ngx_queue_remove(&handle->handle_queue);
+}
+
+inline static void uv__handle_queue_foreach(uv_loop_t* loop,
+                                            void (*cb)(uv_handle_t*, void*),
+                                            void* arg) {
+  ngx_queue_t* q;
+
+  ngx_queue_foreach(q, &loop->handle_queue) {
+    cb(ngx_queue_data(q, uv_handle_t, handle_queue), arg);
+  }
+}
 
 
 #endif /* UV_COMMON_H_ */

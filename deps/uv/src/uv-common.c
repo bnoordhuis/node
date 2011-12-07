@@ -40,6 +40,24 @@ uv_counters_t* uv_counters() {
 }
 
 
+const char* uv_handle_typename(uv_handle_t* handle) {
+  switch (handle->type) {
+#define XX(v) case v: return #v;
+  UV_HANDLE_TYPE_MAP(XX)
+#undef XX
+  default: ; /* Silence compiler. */
+  }
+  return "<unknown>";
+}
+
+
+void uv_loop_walk(uv_loop_t* loop,
+                  void (*cb)(uv_handle_t* handle, void* arg),
+                  void *arg) {
+  uv__handle_queue_foreach(loop, cb, arg);
+}
+
+
 uv_buf_t uv_buf_init(char* base, size_t len) {
   uv_buf_t buf;
   buf.base = base;

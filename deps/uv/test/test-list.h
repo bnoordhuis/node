@@ -68,6 +68,7 @@ TEST_DECLARE   (timer_ref2)
 TEST_DECLARE   (timer_again)
 TEST_DECLARE   (idle_starvation)
 TEST_DECLARE   (loop_handles)
+TEST_DECLARE   (walk_handles)
 TEST_DECLARE   (ref)
 TEST_DECLARE   (idle_ref)
 TEST_DECLARE   (get_loadavg)
@@ -212,6 +213,7 @@ TASK_LIST_START
   TEST_ENTRY  (unref_in_prepare_cb)
 
   TEST_ENTRY  (loop_handles)
+  TEST_ENTRY  (walk_handles)
 
   TEST_ENTRY  (async)
 

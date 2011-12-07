@@ -55,7 +55,8 @@ typedef void* uv_lib_t;
    * definition of ares_timeout(). \
    */ \
   ev_timer timer; \
-  struct ev_loop* ev;
+  struct ev_loop* ev; \
+  ngx_queue_t handle_queue;
 
 #define UV_REQ_BUFSML_SIZE (4)
 
@@ -91,7 +92,8 @@ typedef void* uv_lib_t;
 #define UV_HANDLE_PRIVATE_FIELDS \
   int fd; \
   int flags; \
-  ev_idle next_watcher;
+  ev_idle next_watcher; \
+  ngx_queue_t handle_queue;
 
 
 #define UV_STREAM_PRIVATE_FIELDS \
