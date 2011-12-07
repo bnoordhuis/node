@@ -2624,6 +2624,32 @@ void EmitExit(v8::Handle<v8::Object> process_l) {
 }
 
 
+#ifdef __POSIX__ /* FIXME make cross-platform */
+static uv_async_t event_loop_debug_;
+
+void EventLoopDebugSignalHandler(int signum) {
+  uv_async_send(&event_loop_debug_);
+}
+
+void EventLoopDebugPrintHandle(uv_handle_t* handle, void* arg) {
+  fprintf(stderr, "[debug] %-10s %p (fd: %d, flags: 0x%x)\n",
+      uv_handle_typename(handle), (void*)handle, handle->fd, handle->flags);
+}
+
+void EventLoopDebugPrintHandles(uv_async_t* handle, int status) {
+  uv_loop_walk(handle->loop, EventLoopDebugPrintHandle, NULL);
+}
+
+void EventLoopDebug(uv_loop_t* loop) {
+  uv_async_init(loop, &event_loop_debug_, EventLoopDebugPrintHandles);
+  uv_unref(loop);
+  RegisterSignalHandler(SIGUSR2, EventLoopDebugSignalHandler);
+}
+#else /* !__POSIX__ */
+# define EventLoopDebug(loop)
+#endif /* __POSIX__ */
+
+
 int Start(int argc, char *argv[]) {
   // This needs to run *before* V8::Initialize()
   argv = Init(argc, argv);
@@ -2641,6 +2667,8 @@ int Start(int argc, char *argv[]) {
   // Create all the objects, load modules, do everything.
   // so your next reading stop should be node::Load()!
   Load(process_l);
+
+  EventLoopDebug(uv_default_loop());
 
   // All our arguments are loaded. We've evaluated all of the scripts. We
   // might even have created TCP servers. Now we enter the main eventloop. If
