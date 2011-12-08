@@ -224,7 +224,7 @@ static void Tick(void) {
   need_tick_cb = false;
   if (uv_is_active((uv_handle_t*) &tick_spinner)) {
     uv_idle_stop(&tick_spinner);
-    uv_unref(uv_default_loop());
+    uv_unref((uv_handle_t*)&tick_spinner);
   }
 
   HandleScope scope;
@@ -266,7 +266,7 @@ static Handle<Value> NeedTickCallback(const Arguments& args) {
   // tick_spinner to keep the event loop alive long enough to handle it.
   if (!uv_is_active((uv_handle_t*) &tick_spinner)) {
     uv_idle_start(&tick_spinner, Spin);
-    uv_ref(uv_default_loop());
+    uv_ref((uv_handle_t*)&tick_spinner);
   }
   return Undefined();
 }
@@ -2556,24 +2556,24 @@ char** Init(int argc, char *argv[]) {
 
   uv_prepare_init(uv_default_loop(), &prepare_tick_watcher);
   uv_prepare_start(&prepare_tick_watcher, PrepareTick);
-  uv_unref(uv_default_loop());
+  uv_unref((uv_handle_t*)&prepare_tick_watcher);
 
   uv_check_init(uv_default_loop(), &check_tick_watcher);
   uv_check_start(&check_tick_watcher, node::CheckTick);
-  uv_unref(uv_default_loop());
+  uv_unref((uv_handle_t*)&check_tick_watcher);
 
   uv_idle_init(uv_default_loop(), &tick_spinner);
-  uv_unref(uv_default_loop());
+  uv_unref((uv_handle_t*)&tick_spinner);
 
   uv_check_init(uv_default_loop(), &gc_check);
   uv_check_start(&gc_check, node::Check);
-  uv_unref(uv_default_loop());
+  uv_unref((uv_handle_t*)&gc_check);
 
   uv_idle_init(uv_default_loop(), &gc_idle);
-  uv_unref(uv_default_loop());
+  uv_unref((uv_handle_t*)&gc_idle);
 
   uv_timer_init(uv_default_loop(), &gc_timer);
-  uv_unref(uv_default_loop());
+  uv_unref((uv_handle_t*)&gc_timer);
 
   V8::SetFatalErrorHandler(node::OnFatalError);
 
@@ -2589,7 +2589,7 @@ char** Init(int argc, char *argv[]) {
   uv_async_init(uv_default_loop(), &node::debug_watcher,
       node::DebugMessageCallback);
   // unref it so that we exit the event loop despite it being active.
-  uv_unref(uv_default_loop());
+  uv_unref((uv_handle_t*)&node::debug_watcher);
 
   // Fetch a reference to the main isolate, so we have a reference to it
   // even when we need it to access it from another (debugger) thread.
@@ -2632,8 +2632,13 @@ void EventLoopDebugSignalHandler(int signum) {
 }
 
 void EventLoopDebugPrintHandle(uv_handle_t* handle, void* arg) {
-  fprintf(stderr, "[debug] %-10s %p (fd: %d, flags: 0x%x)\n",
-      uv_handle_typename(handle), (void*)handle, handle->fd, handle->flags);
+  fprintf(stderr,
+          "[debug] %-10s %p (fd:%d, refs:%d, flags:0x%x)\n",
+          uv_handle_typename(handle),
+          (void*)handle,
+          handle->fd,
+          handle->refcount,
+          handle->flags);
 }
 
 void EventLoopDebugPrintHandles(uv_async_t* handle, int status) {
@@ -2642,7 +2647,7 @@ void EventLoopDebugPrintHandles(uv_async_t* handle, int status) {
 
 void EventLoopDebug(uv_loop_t* loop) {
   uv_async_init(loop, &event_loop_debug_, EventLoopDebugPrintHandles);
-  uv_unref(loop);
+  uv_unref((uv_handle_t*)&event_loop_debug_);
   RegisterSignalHandler(SIGUSR2, EventLoopDebugSignalHandler);
 }
 #else /* !__POSIX__ */

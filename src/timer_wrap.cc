@@ -99,11 +99,11 @@ class TimerWrap : public HandleWrap {
     // uv_timer_init adds a loop reference. (That is, it calls uv_ref.) This
     // is not the behavior we want in Node. Timers should not increase the
     // ref count of the loop except when active.
-    uv_unref(uv_default_loop());
+    uv_unref((uv_handle_t*)&handle_);
   }
 
   ~TimerWrap() {
-    if (!active_) uv_ref(uv_default_loop());
+    if (!active_) uv_ref((uv_handle_t*)&handle_);
   }
 
   void StateChange() {
@@ -113,11 +113,11 @@ class TimerWrap : public HandleWrap {
     if (!was_active && active_) {
       // If our state is changing from inactive to active, we
       // increase the loop's reference count.
-      uv_ref(uv_default_loop());
+      uv_ref((uv_handle_t*)&handle_);
     } else if (was_active && !active_) {
       // If our state is changing from active to inactive, we
       // decrease the loop's reference count.
-      uv_unref(uv_default_loop());
+      uv_unref((uv_handle_t*)&handle_);
     }
   }
 

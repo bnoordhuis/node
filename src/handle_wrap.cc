@@ -70,7 +70,7 @@ Handle<Value> HandleWrap::Unref(const Arguments& args) {
   }
 
   wrap->unref = true;
-  uv_unref(uv_default_loop());
+  uv_unref(wrap->handle__);
 
   return v8::Undefined();
 }
@@ -88,7 +88,7 @@ Handle<Value> HandleWrap::Ref(const Arguments& args) {
   }
 
   wrap->unref = false;
-  uv_ref(uv_default_loop());
+  uv_ref(wrap->handle__);
 
   return v8::Undefined();
 }
