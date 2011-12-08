@@ -99,8 +99,8 @@ enum {
   UV_SHUT          = 0x10,   /* Write side closed. */
   UV_READABLE      = 0x20,   /* The stream is readable */
   UV_WRITABLE      = 0x40,   /* The stream is writable */
-  UV_TCP_NODELAY   = 0x080,  /* Disable Nagle. */
-  UV_TCP_KEEPALIVE = 0x100   /* Turn on keep-alive. */
+  UV_TCP_NODELAY   = 0x100,  /* Disable Nagle. */
+  UV_TCP_KEEPALIVE = 0x200   /* Turn on keep-alive. */
 };
 
 size_t uv__strlcpy(char* dst, const char* src, size_t size);
@@ -145,5 +145,13 @@ void uv__udp_watcher_stop(uv_udp_t* handle, ev_io* w);
 
 /* fs */
 void uv__fs_event_destroy(uv_fs_event_t* handle);
+
+inline static void uv__loop_ref(uv_loop_t* loop) {
+  ev_ref(loop->ev);
+}
+
+inline static void uv__loop_unref(uv_loop_t* loop) {
+  ev_unref(loop->ev);
+}
 
 #endif /* UV_UNIX_INTERNAL_H_ */

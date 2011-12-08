@@ -116,7 +116,7 @@ TEST_IMPL(timer) {
   ASSERT(r == 0);
   r = uv_timer_stop(&never);
   ASSERT(r == 0);
-  uv_unref(uv_default_loop());
+  uv_unref((uv_handle_t*)&never);
 
   uv_run(uv_default_loop());
 
@@ -141,7 +141,7 @@ TEST_IMPL(timer_ref) {
   ASSERT(r == 0);
 
   /* One unref should set the loop ref count to zero. */
-  uv_unref(uv_default_loop());
+  uv_unref((uv_handle_t*)&never);
 
   /* Therefore this does not block */
   uv_run(uv_default_loop());
@@ -163,7 +163,7 @@ TEST_IMPL(timer_ref2) {
   ASSERT(r == 0);
 
   /* One unref should set the loop ref count to zero. */
-  uv_unref(uv_default_loop());
+  uv_unref((uv_handle_t*)&never);
 
   /* Therefore this does not block */
   uv_run(uv_default_loop());

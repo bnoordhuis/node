@@ -88,7 +88,7 @@ static void start_server(uv_loop_t* loop, uv_tcp_t* handle) {
   r = uv_listen((uv_stream_t*)handle, 128, connection_cb);
   ASSERT(r == 0);
 
-  uv_unref(loop);
+  uv_unref((uv_handle_t*)handle);
 }
 
 
@@ -138,7 +138,7 @@ TEST_IMPL(tcp_ref) {
   ASSERT(r == 0);
 
   /* One unref should set the loop ref count to zero. */
-  uv_unref(uv_default_loop());
+  uv_unref((uv_handle_t*)&never);
 
   /* Therefore this does not block */
   uv_run(uv_default_loop());
@@ -167,7 +167,7 @@ TEST_IMPL(tcp_ref2) {
   ASSERT(r == 0);
 
   /* One unref should set the loop ref count to zero. */
-  uv_unref(uv_default_loop());
+  uv_unref((uv_handle_t*)&never);
 
   /* Therefore this does not block */
   uv_run(uv_default_loop());

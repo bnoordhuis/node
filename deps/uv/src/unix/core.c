@@ -211,6 +211,7 @@ void uv__handle_init(uv_loop_t* loop, uv_handle_t* handle,
   handle->loop = loop;
   handle->type = type;
   handle->flags = 0;
+  handle->refcount = 0;
 
   ev_init(&handle->next_watcher, uv__next);
   handle->next_watcher.data = handle;
@@ -301,13 +302,17 @@ void uv__next(EV_P_ ev_idle* watcher, int revents) {
 }
 
 
-void uv_ref(uv_loop_t* loop) {
-  ev_ref(loop->ev);
+void uv_ref(uv_handle_t* handle) {
+  assert(handle->refcount < 0);
+  ev_ref(handle->loop->ev);
+  handle->refcount++;
 }
 
 
-void uv_unref(uv_loop_t* loop) {
-  ev_unref(loop->ev);
+void uv_unref(uv_handle_t* handle) {
+  assert(handle->refcount <= 0);
+  ev_unref(handle->loop->ev);
+  handle->refcount--;
 }
 
 
@@ -607,7 +612,7 @@ static int uv_getaddrinfo_done(eio_req* req) {
 
   handle->res = NULL;
 
-  uv_unref(handle->loop);
+  uv__loop_unref(handle->loop);
 
   free(handle->hints);
   free(handle->service);
@@ -687,7 +692,7 @@ int uv_getaddrinfo(uv_loop_t* loop,
   /* TODO check handle->hostname == NULL */
   /* TODO check handle->service == NULL */
 
-  uv_ref(loop);
+  uv__loop_ref(handle->loop);
 
   req = eio_custom(getaddrinfo_thread_proc, EIO_PRI_DEFAULT,
       uv_getaddrinfo_done, handle);

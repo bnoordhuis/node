@@ -92,6 +92,7 @@ typedef void* uv_lib_t;
 #define UV_HANDLE_PRIVATE_FIELDS \
   int fd; \
   int flags; \
+  int refcount; \
   ev_idle next_watcher; \
   ngx_queue_t handle_queue;
 

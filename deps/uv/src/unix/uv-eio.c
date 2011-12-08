@@ -39,7 +39,7 @@ static void uv_eio_do_poll(uv_idle_t* watcher, int status) {
   if (eio_poll() != -1 && uv_is_active((uv_handle_t*) watcher)) {
     /* printf("uv_eio_poller stop\n"); */
     uv_idle_stop(watcher);
-    uv_unref(watcher->loop);
+    uv_unref((uv_handle_t*)watcher);
   }
 }
 
@@ -55,7 +55,7 @@ static void uv_eio_want_poll_notifier_cb(uv_async_t* watcher, int status) {
   if (eio_poll() == -1 && !uv_is_active((uv_handle_t*) &loop->uv_eio_poller)) {
     /* printf("uv_eio_poller start\n"); */
     uv_idle_start(&loop->uv_eio_poller, uv_eio_do_poll);
-    uv_ref(loop);
+    uv_ref((uv_handle_t*)&loop->uv_eio_poller);
   }
 }
 
@@ -70,7 +70,7 @@ static void uv_eio_done_poll_notifier_cb(uv_async_t* watcher, int revents) {
   if (eio_poll() != -1 && uv_is_active((uv_handle_t*) &loop->uv_eio_poller)) {
     /* printf("uv_eio_poller stop\n"); */
     uv_idle_stop(&loop->uv_eio_poller);
-    uv_unref(loop);
+    uv_unref((uv_handle_t*)&loop->uv_eio_poller);
   }
 }
 
@@ -112,11 +112,11 @@ void uv_eio_init(uv_loop_t* loop) {
     loop->uv_eio_want_poll_notifier.data = loop;
     uv_async_init(loop, &loop->uv_eio_want_poll_notifier,
         uv_eio_want_poll_notifier_cb);
-    uv_unref(loop);
+    uv_unref((uv_handle_t*)&loop->uv_eio_poller);
 
     uv_async_init(loop, &loop->uv_eio_done_poll_notifier,
         uv_eio_done_poll_notifier_cb);
-    uv_unref(loop);
+    uv_unref((uv_handle_t*)&loop->uv_eio_done_poll_notifier);
 
     eio_init(uv_eio_want_poll, uv_eio_done_poll);
     /*

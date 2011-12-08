@@ -33,7 +33,7 @@ TEST_IMPL(idle_ref) {
   uv_idle_t h;
   uv_idle_init(uv_default_loop(), &h);
   uv_idle_start(&h, NULL);
-  uv_unref(uv_default_loop());
+  uv_unref((uv_handle_t*)&h);
   uv_run(uv_default_loop());
   return 0;
 }
@@ -42,7 +42,7 @@ TEST_IMPL(idle_ref) {
 TEST_IMPL(async_ref) {
   uv_async_t h;
   uv_async_init(uv_default_loop(), &h, NULL);
-  uv_unref(uv_default_loop());
+  uv_unref((uv_handle_t*)&h);
   uv_run(uv_default_loop());
   return 0;
 }
@@ -52,7 +52,7 @@ TEST_IMPL(prepare_ref) {
   uv_prepare_t h;
   uv_prepare_init(uv_default_loop(), &h);
   uv_prepare_start(&h, NULL);
-  uv_unref(uv_default_loop());
+  uv_unref((uv_handle_t*)&h);
   uv_run(uv_default_loop());
   return 0;
 }
@@ -62,7 +62,7 @@ TEST_IMPL(check_ref) {
   uv_check_t h;
   uv_check_init(uv_default_loop(), &h);
   uv_check_start(&h, NULL);
-  uv_unref(uv_default_loop());
+  uv_unref((uv_handle_t*)&h);
   uv_run(uv_default_loop());
   return 0;
 }
@@ -72,7 +72,7 @@ static void prepare_cb(uv_prepare_t* handle, int status) {
   ASSERT(handle != NULL);
   ASSERT(status == 0);
 
-  uv_unref(uv_default_loop());
+  uv_unref((uv_handle_t*)handle);
 }
 
 

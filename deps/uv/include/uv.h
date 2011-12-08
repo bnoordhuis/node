@@ -224,8 +224,8 @@ UV_EXTERN int uv_run (uv_loop_t*);
  * Manually modify the event loop's reference count. Useful if the user wants
  * to have a handle or timeout that doesn't keep the loop alive.
  */
-UV_EXTERN void uv_ref(uv_loop_t*);
-UV_EXTERN void uv_unref(uv_loop_t*);
+UV_EXTERN void uv_ref(uv_handle_t*);
+UV_EXTERN void uv_unref(uv_handle_t*);
 
 UV_EXTERN void uv_update_time(uv_loop_t*);
 UV_EXTERN int64_t uv_now(uv_loop_t*);

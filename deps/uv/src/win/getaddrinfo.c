@@ -360,7 +360,7 @@ int uv_getaddrinfo(uv_loop_t* loop,
     goto error;
   }
 
-  uv_ref(loop);
+  uv_ref((uv_handle_t*)handle);
 
   return 0;
 
