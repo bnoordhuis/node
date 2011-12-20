@@ -1339,6 +1339,12 @@ UV_EXTERN void uv_rwlock_wrlock(uv_rwlock_t* rwlock);
 UV_EXTERN int uv_rwlock_trywrlock(uv_rwlock_t* rwlock);
 UV_EXTERN void uv_rwlock_wrunlock(uv_rwlock_t* rwlock);
 
+/* Runs a function once and only once. Concurrent calls to uv_once() with the
+ * same guard will block all callers except one (it's unspecified which one).
+ * The guard should be initialized statically with the UV_ONCE_INIT macro.
+ */
+UV_EXTERN void uv_once(uv_once_t* guard, void (*callback)(void));
+
 UV_EXTERN int uv_thread_create(uv_thread_t *tid,
     void (*entry)(void *arg), void *arg);
 UV_EXTERN int uv_thread_join(uv_thread_t *tid);
@@ -1394,6 +1400,8 @@ struct uv_loop_s {
   uv_async_t uv_eio_want_poll_notifier;
   uv_async_t uv_eio_done_poll_notifier;
   uv_idle_t uv_eio_poller;
+  /* Poll result queue */
+  eio_channel uv_eio_channel;
   /* Diagnostic counters */
   uv_counters_t counters;
   /* The last error */
