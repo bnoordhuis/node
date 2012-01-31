@@ -28,6 +28,7 @@
       'lib/fs.js',
       'lib/http.js',
       'lib/https.js',
+      'lib/http_parser.js',
       'lib/module.js',
       'lib/net.js',
       'lib/os.js',
