@@ -687,7 +687,7 @@ assert.equal(Buffer._charsWritten, 9);
 buf.write('0123456789', 'binary');
 assert.equal(Buffer._charsWritten, 9);
 buf.write('123456', 'base64');
-assert.equal(Buffer._charsWritten, 6);
+assert.equal(Buffer._charsWritten, 4);
 buf.write('00010203040506070809', 'hex');
 assert.equal(Buffer._charsWritten, 18);
 
@@ -703,3 +703,8 @@ assert.equal(Buffer({length: 'BAM'}).length, 0);
 // Make sure that strings are not coerced to numbers.
 assert.equal(Buffer('99').length, 2);
 assert.equal(Buffer('13.37').length, 5);
+
+// Ensure that the length argument is respected.
+'ascii utf8 hex base64 binary'.split(' ').forEach(function(enc) {
+  assert.equal(Buffer(1).write('aaaaaa', 0, 1, enc), 1);
+});
