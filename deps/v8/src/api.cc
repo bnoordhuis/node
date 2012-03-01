@@ -5340,7 +5340,6 @@ inline void String::Memory::pop_parent() {
     parent_ = reinterpret_cast<intptr_t>(current_->unchecked_second());
     current_->set_second(child, i::SKIP_WRITE_BARRIER);
   }
-  ASSERT_NE(current_, parent_);
 }
 
 
@@ -5434,16 +5433,16 @@ strong_inline void String::Memory::set_flat(i::String* string) {
       if (parent_shape.representation_tag() == i::kSeqStringTag) {
         ptr_ = i::SeqAsciiString::cast(parent)->GetChars() + slice->offset();
       } else {
-        ASSERT(parent_shape.representation_tag() == kExternalStringTag);
+        ASSERT(parent_shape.representation_tag() == i::kExternalStringTag);
         ptr_ = i::ExternalAsciiString::cast(parent)->GetChars() + slice->offset();
       }
     } else {
-      ASSERT(parent_shape.encoding_tag() == kTwoByteStringTag);
+      ASSERT(parent_shape.encoding_tag() == i::kTwoByteStringTag);
       storage_type_ = kTwoByte;
       if (parent_shape.representation_tag() == i::kSeqStringTag) {
         ptr_ = i::SeqTwoByteString::cast(parent)->GetChars() + slice->offset();
       } else {
-        ASSERT(parent_shape.representation_tag() == kExternalStringTag);
+        ASSERT(parent_shape.representation_tag() == i::kExternalStringTag);
         ptr_ = i::ExternalTwoByteString::cast(parent)->GetChars() + slice->offset();
       }
     }
@@ -5454,16 +5453,16 @@ strong_inline void String::Memory::set_flat(i::String* string) {
       if (shape.representation_tag() == i::kSeqStringTag) {
         ptr_ = i::SeqAsciiString::cast(string)->GetChars();
       } else {
-        ASSERT(shape.representation_tag() == kExternalStringTag);
+        ASSERT(shape.representation_tag() == i::kExternalStringTag);
         ptr_ = i::ExternalAsciiString::cast(string)->GetChars();
       }
     } else {
-      ASSERT(shape.encoding_tag() == kTwoByteStringTag);
+      ASSERT(shape.encoding_tag() == i::kTwoByteStringTag);
       storage_type_ = kTwoByte;
       if (shape.representation_tag() == i::kSeqStringTag) {
         ptr_ = i::SeqTwoByteString::cast(string)->GetChars();
       } else {
-        ASSERT(shape.representation_tag() == kExternalStringTag);
+        ASSERT(shape.representation_tag() == i::kExternalStringTag);
         ptr_ = i::ExternalTwoByteString::cast(string)->GetChars();
       }
     }
