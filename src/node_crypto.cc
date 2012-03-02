@@ -44,6 +44,7 @@
 # include <pthread.h>
 #endif
 
+
 #if OPENSSL_VERSION_NUMBER >= 0x10000000L
 # define OPENSSL_CONST const
 #else
@@ -149,6 +150,7 @@ void SecureContext::Initialize(Handle<Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "setSessionIdContext",
                                SecureContext::SetSessionIdContext);
   NODE_SET_PROTOTYPE_METHOD(t, "close", SecureContext::Close);
+  NODE_SET_PROTOTYPE_METHOD(t, "loadPKCS12", SecureContext::LoadPKCS12);
 
   target->Set(String::NewSymbol("SecureContext"), t->GetFunction());
 }
@@ -573,6 +575,103 @@ Handle<Value> SecureContext::Close(const Arguments& args) {
   SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.Holder());
   sc->FreeCTXMem();
   return False();
+}
+
+//Takes .pfx or .p12 and password in string or buffer format
+Handle<Value> SecureContext::LoadPKCS12(const Arguments& args) {
+  HandleScope scope;
+
+  PKCS12 * p12 = NULL;
+  EVP_PKEY * pkey = NULL;
+  X509 * cert = NULL;
+  BIO * in = NULL;
+  STACK_OF(X509) *extraCerts = NULL;
+
+  bool ret = false;
+  char *pass = NULL;
+
+  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.Holder());
+
+  if (args.Length() < 1) {
+    return ThrowException(Exception::TypeError(
+          String::New("Bad parameter")));
+  }
+
+  in = LoadBIO(args[0]);
+  if (in == NULL) {
+    return ThrowException(Exception::Error(
+          String::New("Unable to Load Bio")));
+  }
+
+  if (args.Length() >= 2) {
+    ASSERT_IS_STRING_OR_BUFFER(args[1]);
+
+    int passlen = DecodeBytes(args[1], BINARY);
+
+    if (passlen < 0) {
+      return ThrowException(Exception::TypeError(
+            String::New("Bad password")));
+    }
+    pass = new char[passlen + 1];
+    int pass_written = DecodeWrite(pass, passlen, args[1], BINARY);
+
+    assert(pass_written == passlen);
+
+    pass[passlen] = '\0';
+  }
+
+  if (d2i_PKCS12_bio(in, &p12)) {
+
+    if (PKCS12_parse(p12, pass, &pkey, &cert, &extraCerts)) {
+
+      //set cert
+      if (SSL_CTX_use_certificate(sc->ctx_, cert)) {
+
+        //set key
+        if (SSL_CTX_use_PrivateKey(sc->ctx_, pkey)) {
+
+          //set extra certs
+          while (true) {
+            X509 *extraCert = sk_X509_pop(extraCerts);
+
+            if (!extraCert) break;
+
+            if (!SSL_CTX_add_extra_chain_cert(sc->ctx_, extraCert)) {
+                goto cleanup;
+            }
+          }
+          ret = true;
+        }
+      }
+cleanup:
+      if (pkey) {
+        EVP_PKEY_free(pkey);
+      }
+      if (cert) {
+        X509_free(cert);
+      }
+      if (extraCerts) {
+        sk_X509_free(extraCerts);
+      }
+    }
+    PKCS12_free(p12);
+  }
+
+  if (in) {
+    BIO_free(in);
+  }
+
+  if (pass) {
+    delete[] pass;
+  }
+
+  if (!ret) {
+    unsigned long err = ERR_get_error();
+    const char *str = ERR_reason_error_string(err);
+
+    return ThrowException(Exception::Error(String::New(str)));
+  }
+  return True();
 }
 
 
