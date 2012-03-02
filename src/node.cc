@@ -2025,6 +2025,17 @@ Handle<Value> TestUtf8Old(const Arguments& args) {
 }
 
 
+Handle<Value> Test(const Arguments& args) {
+  HandleScope scope;
+
+  String::WriteAsciiMemory writer(1000);
+
+  memset(*writer, 'x', writer.length());
+
+  return scope.Close(writer.Finalize());
+}
+
+
 Handle<Object> SetupProcessObject(int argc, char *argv[]) {
   HandleScope scope;
 
@@ -2142,6 +2153,7 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
   NODE_SET_METHOD(process, "test_utf8_new", TestUtf8New);
   NODE_SET_METHOD(process, "test_utf8_old_hint", TestUtf8Old<true>);
   NODE_SET_METHOD(process, "test_utf8_old_nohint", TestUtf8Old<false>);
+  NODE_SET_METHOD(process, "test", Test);
 
 #ifdef __POSIX__
   NODE_SET_METHOD(process, "getuid", GetUid);
