@@ -607,70 +607,46 @@ Handle<Value> SecureContext::LoadPKCS12(const Arguments& args) {
     ASSERT_IS_STRING_OR_BUFFER(args[1]);
 
     int passlen = DecodeBytes(args[1], BINARY);
-
     if (passlen < 0) {
       return ThrowException(Exception::TypeError(
             String::New("Bad password")));
     }
+
     pass = new char[passlen + 1];
     int pass_written = DecodeWrite(pass, passlen, args[1], BINARY);
-
     assert(pass_written == passlen);
-
     pass[passlen] = '\0';
   }
 
-  if (d2i_PKCS12_bio(in, &p12)) {
+  if ((p12 = d2i_PKCS12_bio(in, NULL)) &&
+      PKCS12_parse(p12, pass, &pkey, &cert, &extraCerts))
+  {
+    X509* extraCert;
 
-    if (PKCS12_parse(p12, pass, &pkey, &cert, &extraCerts)) {
+    if (!SSL_CTX_use_certificate(sc->ctx_, cert)) goto cleanup;
+    if (!SSL_CTX_use_PrivateKey(sc->ctx_, pkey)) goto cleanup;
 
-      //set cert
-      if (SSL_CTX_use_certificate(sc->ctx_, cert)) {
-
-        //set key
-        if (SSL_CTX_use_PrivateKey(sc->ctx_, pkey)) {
-
-          //set extra certs
-          while (true) {
-            X509 *extraCert = sk_X509_pop(extraCerts);
-
-            if (!extraCert) break;
-
-            if (!SSL_CTX_add_extra_chain_cert(sc->ctx_, extraCert)) {
-                goto cleanup;
-            }
-          }
-          ret = true;
-        }
-      }
-cleanup:
-      if (pkey) {
-        EVP_PKEY_free(pkey);
-      }
-      if (cert) {
-        X509_free(cert);
-      }
-      if (extraCerts) {
-        sk_X509_free(extraCerts);
-      }
+    while ((extraCert = sk_X509_pop(extraCerts))) {
+      if (!SSL_CTX_add_extra_chain_cert(sc->ctx_, extraCert)) goto cleanup;
     }
-    PKCS12_free(p12);
-  }
+    ret = true;
 
-  if (in) {
-    BIO_free(in);
+cleanup:
+    EVP_PKEY_free(pkey);
+    X509_free(cert);
+    sk_X509_pop_free(extraCerts, X509_free);
   }
+  PKCS12_free(p12);
 
-  if (pass) {
-    delete[] pass;
-  }
+  BIO_free(in);
+  delete[] pass;
 
   if (!ret) {
     unsigned long err = ERR_get_error();
     const char *str = ERR_reason_error_string(err);
-
     return ThrowException(Exception::Error(String::New(str)));
   }
+
   return True();
 }
 
