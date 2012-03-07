@@ -35,7 +35,7 @@
         },
       },
       'Release': {
-        'cflags': [ '-O3', '-fdata-sections', '-ffunction-sections' ],
+        'cflags': [ '-O3', '-g', '-fdata-sections', '-ffunction-sections' ],
         'conditions': [
           ['target_arch=="x64"', {
             'msvs_configuration_platform': 'x64',
