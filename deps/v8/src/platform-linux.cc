@@ -778,6 +778,58 @@ void Thread::Join() {
 }
 
 
+#if __GNUC__ || __clang__
+
+struct thread_local_storage {
+  unsigned int telts_;
+  unsigned int nelts_;
+  void *elts_[1];
+};
+
+static __thread thread_local_storage* tls_ = NULL;
+
+
+inline static void **find_in_tls(Thread::LocalStorageKey key) {
+  ASSERT(tls_ != NULL);
+  ASSERT(static_cast<unsigned int>(key) < tls_->nelts_);
+  return tls_->elts_ + static_cast<unsigned int>(key);
+}
+
+
+Thread::LocalStorageKey Thread::CreateThreadLocalKey() {
+  thread_local_storage* tls = tls_;
+
+  if (__builtin_expect(tls == NULL || tls->nelts_ == tls->telts_, 0)) {
+    unsigned int telts = tls ? tls->telts_ * 2 : 8;
+    unsigned int nelts = tls ? tls->nelts_ : 0;
+    size_t size = sizeof(*tls) + sizeof(tls->elts_[0]) * (telts - 1);
+    tls = static_cast<thread_local_storage*>(realloc(tls, size));
+    ASSERT(tls != NULL);
+    tls->telts_ = telts;
+    tls->nelts_ = nelts;
+    tls_ = tls;
+  }
+
+  return static_cast<LocalStorageKey>(tls->nelts_++);
+}
+
+
+void Thread::DeleteThreadLocalKey(LocalStorageKey key) {
+  *find_in_tls(key) = NULL;
+}
+
+
+void* Thread::GetThreadLocal(LocalStorageKey key) {
+  return *find_in_tls(key);
+}
+
+
+void Thread::SetThreadLocal(LocalStorageKey key, void* value) {
+  *find_in_tls(key) = value;
+}
+
+#else // !(__GNUC__ || __clang__)
+
 Thread::LocalStorageKey Thread::CreateThreadLocalKey() {
   pthread_key_t key;
   int result = pthread_key_create(&key, NULL);
@@ -805,6 +857,8 @@ void Thread::SetThreadLocal(LocalStorageKey key, void* value) {
   pthread_key_t pthread_key = static_cast<pthread_key_t>(key);
   pthread_setspecific(pthread_key, value);
 }
+
+#endif // __GNUC__ || __clang__
 
 
 void Thread::YieldCPU() {
