@@ -970,18 +970,12 @@ Handle<Value> FromConstructorTemplate(Persistent<FunctionTemplate>& t,
 //
 // Maybe make this a method of a node::Handle super class
 //
+#undef MakeCallback
 void MakeCallback(Handle<Object> object,
-                  const char* method,
+                  Handle<Function> callback,
                   int argc,
                   Handle<Value> argv[]) {
   HandleScope scope;
-
-  Local<Value> callback_v = object->Get(String::New(method));
-  if (!callback_v->IsFunction()) {
-    fprintf(stderr, "method = %s", method);
-  }
-  assert(callback_v->IsFunction());
-  Local<Function> callback = Local<Function>::Cast(callback_v);
 
   // TODO Hook for long stack traces to be made here.
 

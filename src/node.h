@@ -244,9 +244,18 @@ node_module_struct* get_builtin_module(const char *name);
 
 NODE_EXTERN void SetErrno(uv_err_t err);
 NODE_EXTERN void MakeCallback(v8::Handle<v8::Object> object,
-                              const char* method,
+                              v8::Handle<v8::Function> callback,
                               int argc,
                               v8::Handle<v8::Value> argv[]);
+
+#define MakeCallback(obj, method, argc, argv) \
+  do { \
+    static v8::Persistent<v8::Function> callback_; \
+    if (callback_.IsEmpty()) callback_ = v8::Persistent<v8::Function>::New( \
+      v8::Handle<v8::Function>::Cast((obj)->Get(v8::String::New(method)))); \
+    MakeCallback(obj, callback_, argc, argv); \
+  } \
+  while (0)
 
 }  // namespace node
 #endif  // SRC_NODE_H_
