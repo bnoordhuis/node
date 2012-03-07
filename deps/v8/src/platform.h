@@ -410,10 +410,14 @@ class Thread {
   // LOCAL_STORAGE_KEY_MIN_VALUE and LOCAL_STORAGE_KEY_MAX_VALUE are specified
   // to ensure that enumeration type has correct value range (see Issue 830 for
   // more details).
+#if __linux__
+   typedef void **LocalStorageKey;
+#else
   enum LocalStorageKey {
     LOCAL_STORAGE_KEY_MIN_VALUE = kMinInt,
     LOCAL_STORAGE_KEY_MAX_VALUE = kMaxInt
   };
+#endif
 
   class Options {
    public:
@@ -447,13 +451,28 @@ class Thread {
   virtual void Run() = 0;
 
   // Thread-local storage.
+#if __linux__
+  static LocalStorageKey CreateThreadLocalKey() {
+    return new void*(0);
+  }
+  static void DeleteThreadLocalKey(LocalStorageKey key) {
+    delete key;
+  }
+  static void* GetThreadLocal(LocalStorageKey key) {
+    return *key;
+  }
+  static void SetThreadLocal(LocalStorageKey key, void* value) {
+    *key = value;
+  }
+#else
   static LocalStorageKey CreateThreadLocalKey();
   static void DeleteThreadLocalKey(LocalStorageKey key);
   static void* GetThreadLocal(LocalStorageKey key);
+  static void SetThreadLocal(LocalStorageKey key, void* value);
+#endif
   static int GetThreadLocalInt(LocalStorageKey key) {
     return static_cast<int>(reinterpret_cast<intptr_t>(GetThreadLocal(key)));
   }
-  static void SetThreadLocal(LocalStorageKey key, void* value);
   static void SetThreadLocalInt(LocalStorageKey key, int value) {
     SetThreadLocal(key, reinterpret_cast<void*>(static_cast<intptr_t>(value)));
   }
