@@ -223,7 +223,7 @@ class TypedArray {
       length = obj->Get(v8::String::New("length"))->Uint32Value();
 
       // TODO(deanm): Handle integer overflow.
-      v8::Handle<v8::Value> argv[1] = {
+      v8::Local<v8::Value> argv[1] = {
           v8::Integer::NewFromUnsigned(length * TBytes)};
       buffer = ArrayBuffer::GetTemplate()->
                  GetFunction()->NewInstance(1, argv);
@@ -250,7 +250,7 @@ class TypedArray {
 
       length = args[0]->Uint32Value();
       // TODO(deanm): Handle integer overflow.
-      v8::Handle<v8::Value> argv[1] = {
+      v8::Local<v8::Value> argv[1] = {
           v8::Integer::NewFromUnsigned(length * TBytes)};
 
       buffer = ArrayBuffer::GetTemplate()->
@@ -370,7 +370,7 @@ class TypedArray {
         args.This()->Get(v8::String::New("byteOffset"))->Uint32Value();
 
     // Call through to the ArrayBuffer, byteOffset, length constructor.
-    v8::Handle<v8::Value> argv[] = {
+    v8::Local<v8::Value> argv[] = {
         args.This()->Get(v8::String::New("buffer")),
         v8::Integer::New(byte_offset),
         v8::Integer::New(end - begin)};
