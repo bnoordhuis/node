@@ -209,7 +209,7 @@ struct StringPtr {
   }
 
 
-  Handle<String> ToString() const {
+  Local<String> ToString() const {
     if (str_)
       return String::New(str_, size_);
     else
@@ -345,7 +345,7 @@ public:
     if (!cb->IsFunction())
       return 0;
 
-    Handle<Value> argv[3] = {
+    Local<Value> argv[3] = {
       *current_buffer,
       Integer::New(at - current_buffer_data),
       Integer::New(length)
@@ -551,7 +551,7 @@ private:
     if (!cb->IsFunction())
       return;
 
-    Handle<Value> argv[2] = {
+    Local<Value> argv[2] = {
       CreateHeaders(),
       url_.ToString()
     };
