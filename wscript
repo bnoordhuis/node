@@ -909,6 +909,7 @@ def build(bld):
     src/node_zlib.cc
     src/timer_wrap.cc
     src/handle_wrap.cc
+    src/slab_allocator.cc
     src/stream_wrap.cc
     src/tcp_wrap.cc
     src/udp_wrap.cc
