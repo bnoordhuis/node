@@ -2766,6 +2766,37 @@ char** Init(int argc, char *argv[]) {
 }
 
 
+struct AtExitCallback {
+  AtExitCallback* next_;
+  void (*cb_)(void* arg);
+  void* arg_;
+};
+
+static AtExitCallback* at_exit_functions_;
+
+
+void RunAtExit() {
+  AtExitCallback* p = at_exit_functions_;
+  at_exit_functions_ = NULL;
+
+  while (p) {
+    AtExitCallback* q = p->next_;
+    p->cb_(p->arg_);
+    delete p;
+    p = q;
+  }
+}
+
+
+void AtExit(void (*cb)(void* arg), void* arg) {
+  AtExitCallback* p = new AtExitCallback;
+  p->cb_ = cb;
+  p->arg_ = arg;
+  p->next_ = at_exit_functions_;
+  at_exit_functions_ = p;
+}
+
+
 void EmitExit(v8::Handle<v8::Object> process_l) {
   // process.emit('exit')
   Local<Value> emit_v = process_l->Get(String::New("emit"));
@@ -2845,6 +2876,7 @@ int Start(int argc, char *argv[]) {
   uv_run(uv_default_loop());
 
   EmitExit(process_l);
+  RunAtExit();
 
 #ifndef NDEBUG
   // Clean up.
