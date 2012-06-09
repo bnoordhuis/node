@@ -70,6 +70,36 @@ static Persistent<String> unknown_method_sym;
 HTTP_METHOD_MAP(X)
 #undef X
 
+static Persistent<String> accept_header;
+static Persistent<String> accept_charset_header;
+static Persistent<String> accept_encoding_header;
+static Persistent<String> accept_language_header;
+static Persistent<String> authorization_header;
+static Persistent<String> cache_control_header;
+static Persistent<String> connection_header;
+static Persistent<String> content_encoding_header;
+static Persistent<String> content_length_header;
+static Persistent<String> content_type_header;
+static Persistent<String> cookie_header;
+static Persistent<String> date_header;
+static Persistent<String> etag_header;
+static Persistent<String> expect_header;
+static Persistent<String> expires_header;
+static Persistent<String> host_header;
+static Persistent<String> if_modified_since_header;
+static Persistent<String> if_none_match_header;
+static Persistent<String> last_modified_header;
+static Persistent<String> location_header;
+static Persistent<String> range_header;
+static Persistent<String> server_header;
+static Persistent<String> set_cookie_header;
+static Persistent<String> te_header;
+static Persistent<String> transfer_encoding_header;
+static Persistent<String> user_agent_header;
+static Persistent<String> via_header;
+static Persistent<String> www_authenticate_header;
+static Persistent<String> x_forwarded_for_header;
+
 static struct http_parser_settings settings;
 
 
@@ -171,6 +201,166 @@ struct StringPtr {
       return String::New(str_, size_);
     else
       return String::Empty();
+  }
+
+
+  Handle<String> ToHeaderString() const {
+    if (str_ == NULL || size_ == 0)
+      return String::Empty();
+
+    char car = str_[0];
+    const char* cdr = str_ + 1;
+
+    switch (size_) {
+    case 1:
+    case 2:
+      if (car == 'T') {
+        if (cdr[0] == 'E') return te_header;
+      }
+      break;
+
+    case 3:
+      if (car == 'V') {
+        if (cdr[0] == 'i' && cdr[1] == 'a') return via_header;
+      }
+      break;
+
+    case 4:
+      if (car == 'D') {
+        if (memcmp(cdr, "ate", 3) == 0) return date_header;
+      }
+      else if (car == 'E') {
+        if (memcmp(cdr, "Tag", 3) == 0) return etag_header;
+      }
+      else if (car == 'H') {
+        if (memcmp(cdr, "ost", 3) == 0) return host_header;
+      }
+      break;
+
+    case 5:
+      if (car == 'R') {
+        if (memcmp(cdr, "ange", 4) == 0) return range_header;
+      }
+      break;
+
+    case 6:
+      if (car == 'A') {
+        if (memcmp(cdr, "ccept", 5) == 0) return accept_header;
+      }
+      else if (car == 'C') {
+        if (memcmp(cdr, "ookie", 5) == 0) return cookie_header;
+      }
+      else if (car == 'E') {
+        if (memcmp(cdr, "xpect", 5) == 0) return expect_header;
+      }
+      else if (car == 'S') {
+        if (memcmp(cdr, "erver", 5) == 0) return server_header;
+      }
+      break;
+
+    case 7:
+      if (car == 'E') {
+        if (memcmp(cdr, "xpires", 6) == 0) return expires_header;
+      }
+      break;
+
+    case 8:
+      if (car == 'L') {
+        if (memcmp(cdr, "ocation", 7) == 0) return location_header;
+      }
+      break;
+
+    case 9:
+      break;
+
+    case 10:
+      if (car == 'C') {
+        if (memcmp(cdr, "onnection", 9) == 0) return connection_header;
+      }
+      else if (car == 'S') {
+        if (memcmp(cdr, "et-Cookie", 9) == 0) return set_cookie_header;
+      }
+      else if (car == 'U') {
+        if (memcmp(cdr, "ser-Agent", 9) == 0) return user_agent_header;
+      }
+      break;
+
+    case 11:
+      break;
+
+    case 12:
+      if (car == 'C') {
+        if (memcmp(cdr, "ontent-Type", 11) == 0) return content_type_header;
+      }
+      break;
+
+    case 13:
+      if (car == 'A') {
+        if (memcmp(cdr, "uthorization", 12) == 0) return authorization_header;
+      }
+      else if (car == 'C') {
+        if (memcmp(cdr, "ache-Control", 12) == 0) return cache_control_header;
+      }
+      else if (car == 'I') {
+        if (memcmp(cdr, "f-None-Match", 12) == 0) return if_none_match_header;
+      }
+      else if (car == 'L') {
+        if (memcmp(cdr, "ast-Modified", 12) == 0) return last_modified_header;
+      }
+      break;
+
+    case 14:
+      if (car == 'A') {
+        if (memcmp(cdr, "ccept-Charset", 13) == 0) return accept_charset_header;
+      }
+      else if (car == 'C') {
+        if (memcmp(cdr, "ontent-Length", 13) == 0) return content_length_header;
+      }
+      break;
+
+    case 15:
+      if (car == 'A') {
+        if (memcmp(cdr, "ccept-", 6) == 0) {
+          if (cdr[6] == 'E') {
+            if (memcmp(cdr + 7, "ncoding", 7) == 0)
+              return accept_encoding_header;
+          }
+          else if (cdr[6] == 'L') {
+            if (memcmp(cdr + 7, "anguage", 7) == 0)
+              return accept_language_header;
+          }
+        }
+      }
+      else if (car == 'X') {
+        if (memcmp(cdr, "-Forwarded-For", 14) == 0)
+          return x_forwarded_for_header;
+      }
+      break;
+
+    case 16:
+      if (car == 'C') {
+        if (memcmp(cdr, "ontent-Encoding", 15) == 0)
+          return content_encoding_header;
+      }
+      else if (car == 'W') {
+        if (memcmp(cdr, "WW-Authenticate", 15) == 0)
+          return www_authenticate_header;
+      }
+      break;
+
+    case 17:
+      if (car == 'I') {
+        if (memcmp(cdr, "f-Modified-Since", 16) == 0)
+          return if_modified_since_header;
+      }
+      else if (car == 'T') {
+        if (memcmp(cdr, "ransfer-Encoding", 16) == 0)
+          return transfer_encoding_header;
+      }
+      break;
+    }
+
+    return String::New(str_, size_);
   }
 
 
@@ -497,7 +687,7 @@ private:
     Local<Array> headers = Array::New(2 * num_values_);
 
     for (int i = 0; i < num_values_; ++i) {
-      headers->Set(2 * i, fields_[i].ToString());
+      headers->Set(2 * i, fields_[i].ToHeaderString());
       headers->Set(2 * i + 1, values_[i].ToString());
     }
 
@@ -594,6 +784,38 @@ void InitHttpParser(Handle<Object> target) {
   settings.on_headers_complete = Parser::on_headers_complete;
   settings.on_body             = Parser::on_body;
   settings.on_message_complete = Parser::on_message_complete;
+
+#define X(s) Persistent<String>::New(String::New(s))
+  accept_header             = X("Accept");
+  accept_charset_header     = X("Accept-Charset");
+  accept_encoding_header    = X("Accept-Encoding");
+  accept_language_header    = X("Accept-Language");
+  authorization_header      = X("Authorization");
+  cache_control_header      = X("Cache-Control");
+  connection_header         = X("Connection");
+  content_encoding_header   = X("Content-Encoding");
+  content_length_header     = X("Content-Length");
+  content_type_header       = X("Content-Type");
+  cookie_header             = X("Cookie");
+  date_header               = X("Date");
+  etag_header               = X("ETag");
+  expect_header             = X("Expect");
+  expires_header            = X("Expires");
+  host_header               = X("Host");
+  if_modified_since_header  = X("If-Modified-Since");
+  if_none_match_header      = X("If-None-Match");
+  last_modified_header      = X("Last-Modified");
+  location_header           = X("Location");
+  range_header              = X("Range");
+  server_header             = X("Server");
+  set_cookie_header         = X("Set-Cookie");
+  te_header                 = X("TE");
+  transfer_encoding_header  = X("Transfer-Encoding");
+  user_agent_header         = X("User-Agent");
+  via_header                = X("Via");
+  www_authenticate_header   = X("WWW-Authenticate");
+  x_forwarded_for_header    = X("X-Forwarded-For");
+#undef X
 }
 
 }  // namespace node
