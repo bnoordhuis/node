@@ -2898,16 +2898,24 @@ int Start(int argc, char *argv[]) {
     Handle<Object> process_l = SetupProcessObject(argc, argv);
     v8_typed_array::AttachBindings(context->Global());
 
-    // Create all the objects, load modules, do everything.
-    // so your next reading stop should be node::Load()!
-    Load(process_l);
+    {
+      HandleScope temp_scope;
+      // Create all the objects, load modules, do everything.
+      // so your next reading stop should be node::Load()!
+      Load(process_l);
+    }
 
     // All our arguments are loaded. We've evaluated all of the scripts. We
     // might even have created TCP servers. Now we enter the main eventloop. If
     // there are no watchers on the loop (except for the ones that were
     // uv_unref'd) then this function exits. As long as there are active
     // watchers, it blocks.
-    uv_run(uv_default_loop());
+    uv_loop_t* loop = uv_default_loop();
+
+    while (true) {
+      HandleScope temp_scope;
+      if (!uv_run_once(loop)) break;
+    }
 
     EmitExit(process_l);
     RunAtExit();

@@ -296,8 +296,6 @@ public:
 
 
   HTTP_DATA_CB(on_body) {
-    HandleScope scope;
-
     Local<Value> cb = handle_->Get(on_body_sym);
     if (!cb->IsFunction())
       return 0;
@@ -320,8 +318,6 @@ public:
 
 
   HTTP_CB(on_message_complete) {
-    HandleScope scope;
-
     if (num_fields_)
       Flush(); // Flush trailing HTTP headers.
 
@@ -342,8 +338,6 @@ public:
 
 
   static Handle<Value> New(const Arguments& args) {
-    HandleScope scope;
-
     http_parser_type type =
         static_cast<http_parser_type>(args[0]->Int32Value());
 
@@ -374,8 +368,6 @@ public:
 
   // var bytesParsed = parser->execute(buffer, off, len);
   static Handle<Value> Execute(const Arguments& args) {
-    HandleScope scope;
-
     Parser* parser = ObjectWrap::Unwrap<Parser>(args.This());
 
     assert(!current_buffer);
@@ -438,16 +430,14 @@ public:
       Local<Object> obj = e->ToObject();
       obj->Set(String::NewSymbol("bytesParsed"), nparsed_obj);
       obj->Set(String::NewSymbol("code"), String::New(http_errno_name(err)));
-      return scope.Close(e);
+      return e;
     } else {
-      return scope.Close(nparsed_obj);
+      return nparsed_obj;
     }
   }
 
 
   static Handle<Value> Finish(const Arguments& args) {
-    HandleScope scope;
-
     Parser* parser = ObjectWrap::Unwrap<Parser>(args.This());
 
     assert(!current_buffer);
@@ -464,7 +454,7 @@ public:
       Local<Object> obj = e->ToObject();
       obj->Set(String::NewSymbol("bytesParsed"), Integer::New(0));
       obj->Set(String::NewSymbol("code"), String::New(http_errno_name(err)));
-      return scope.Close(e);
+      return e;
     }
 
     return Undefined();
@@ -472,8 +462,6 @@ public:
 
 
   static Handle<Value> Reinitialize(const Arguments& args) {
-    HandleScope scope;
-
     http_parser_type type =
         static_cast<http_parser_type>(args[0]->Int32Value());
 
@@ -507,8 +495,6 @@ private:
 
   // spill headers and request path to JS land
   void Flush() {
-    HandleScope scope;
-
     Local<Value> cb = handle_->Get(on_headers_sym);
 
     if (!cb->IsFunction())
@@ -551,8 +537,6 @@ private:
 
 
 void InitHttpParser(Handle<Object> target) {
-  HandleScope scope;
-
   Local<FunctionTemplate> t = FunctionTemplate::New(Parser::New);
   t->InstanceTemplate()->SetInternalFieldCount(1);
   t->SetClassName(String::NewSymbol("HTTPParser"));

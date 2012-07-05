@@ -51,8 +51,6 @@ void HandleWrap::Initialize(Handle<Object> target) {
 
 
 Handle<Value> HandleWrap::Ref(const Arguments& args) {
-  HandleScope scope;
-
   UNWRAP(HandleWrap)
 
   uv_ref(wrap->handle__);
@@ -63,8 +61,6 @@ Handle<Value> HandleWrap::Ref(const Arguments& args) {
 
 
 Handle<Value> HandleWrap::Unref(const Arguments& args) {
-  HandleScope scope;
-
   UNWRAP(HandleWrap)
 
   uv_unref(wrap->handle__);
@@ -75,8 +71,6 @@ Handle<Value> HandleWrap::Unref(const Arguments& args) {
 
 
 Handle<Value> HandleWrap::Close(const Arguments& args) {
-  HandleScope scope;
-
   HandleWrap *wrap = static_cast<HandleWrap*>(
       args.Holder()->GetPointerFromInternalField(0));
 
@@ -98,7 +92,6 @@ HandleWrap::HandleWrap(Handle<Object> object, uv_handle_t* h) {
     h->data = this;
   }
 
-  HandleScope scope;
   assert(object_.IsEmpty());
   assert(object->InternalFieldCount() > 0);
   object_ = v8::Persistent<v8::Object>::New(object);
