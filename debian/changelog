@@ -1,5 +1,5 @@
 node (0.8.7-1) unstable; urgency=low
 
-  * Initial release (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+  * Initial release.
 
- -- Ben <info@bnoordhuis.nl>  Tue, 21 Aug 2012 23:53:51 +0200
+ -- Ben Noordhuis <info@bnoordhuis.nl>  Tue, 21 Aug 2012 23:53:51 +0200
