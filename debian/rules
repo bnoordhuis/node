@@ -1,21 +1,40 @@
 #!/usr/bin/make -f
-# -*- makefile -*-
-# Sample debian/rules that uses debhelper.
-#
-# This file was originally written by Joey Hess and Craig Small.
-# As a special exception, when this file is copied by dh-make into a
-# dh-make output file, you may use that output file without restriction.
-# This special exception was added by Craig Small in version 0.37 of dh-make.
-#
-# Modified to make a template file for a multi-binary package with separated
-# build-arch and build-indep targets  by Bill Allombert 2001
 
-# Uncomment this to turn on verbose mode.
-#export DH_VERBOSE=1
+.PHONY: build install binary binary-arch clean
 
-# This has to be exported to make some magic below work.
-export DH_OPTIONS
+config.gypi:
+	dh_testdir
+	python configure --prefix=/usr
+	touch $@
 
+build:  config.gypi
+	dh_testdir
+	$(MAKE) BUILDTYPE=Release
 
-%:
-	dh $@ 
+install:  build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+	DESTDIR=$(CURDIR)/debian/node $(MAKE) install
+
+binary:	binary-indep binary-arch
+
+binary-arch:	install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs
+	dh_installdocs
+	dh_installman
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+clean:
+	dh_testdir
+	$(MAKE) distclean
+	find . -name \*.pyc -delete
+	dh_clean
