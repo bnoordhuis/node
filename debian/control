@@ -1,20 +1,30 @@
 Source: node
-Section: unknown
+Section: web
 Priority: extra
-Maintainer: Ben <info@bnoordhuis.nl>
-Build-Depends: debhelper (>= 8.0.0), autotools-dev
+Maintainer: Ben Noordhuis <info@bnoordhuis.nl>
+Build-Depends: debhelper (>= 7), binutils, python
 Standards-Version: 3.9.2
-Homepage: <insert the upstream URL, if relevant>
-#Vcs-Git: git://git.debian.org/collab-maint/node.git
-#Vcs-Browser: http://git.debian.org/?p=collab-maint/node.git;a=summary
+Homepage: http://nodejs.org/
 
 Package: node
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: <insert up to 60 chars description>
- <insert long description, indented with spaces>
+Description: Event-driven I/O server-side JavaScript environment
+ Node.js is a platform built on Chrome's JavaScript runtime for easily building
+ fast, scalable network applications.
+ .
+ Node.js uses an event-driven, non-blocking I/O model that makes it lightweight
+ and efficient, perfect for data-intensive real-time applications that run
+ across distributed devices.
 
 Package: node-doc
 Architecture: all
-Description: documentation for node
- <insert long description, indented with spaces>
+Description: Event-driven I/O server-side JavaScript environment
+ Node.js is a platform built on Chrome's JavaScript runtime for easily building
+ fast, scalable network applications.
+ .
+ Node.js uses an event-driven, non-blocking I/O model that makes it lightweight
+ and efficient, perfect for data-intensive real-time applications that run
+ across distributed devices.
+ .
+ This package contains the documentation.
