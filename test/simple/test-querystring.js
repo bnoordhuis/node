@@ -205,6 +205,13 @@ function testUnlimitedKeys() {
 }
 testUnlimitedKeys();
 
+// Test space decoding
+assert.deepEqual(qs.parse('foo=bar+baz'),
+                 {'foo': 'bar baz'});
+assert.deepEqual(qs.parse('foo=bar+baz', '&', '=', { decodeSpaces: true }),
+                 {'foo': 'bar baz'});
+assert.deepEqual(qs.parse('foo=bar+baz', '&', '=', { decodeSpaces: false }),
+                 {'foo': 'bar+baz'});
 
 var b = qs.unescapeBuffer('%d3%f2Ug%1f6v%24%5e%98%cb' +
                           '%0d%ac%a2%2f%9d%eb%d8%a2%e6');

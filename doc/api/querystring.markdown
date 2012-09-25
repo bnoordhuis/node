@@ -29,8 +29,12 @@ Deserialize a query string to an object.
 Optionally override the default separator (`'&'`) and assignment (`'='`)
 characters.
 
-Options object may contain `maxKeys` property (equal to 1000 by default), it'll
-be used to limit processed keys. Set it to 0 to remove key count limitation.
+The options object may contain the following keys:
+
+  * `decodeSpaces` (default: true). Convert `'+'` characters to spaces.
+
+  * `maxKeys` (default: 1000). Limits the number of processed keys. Set to 0 to
+     disable.
 
 Example:
 
