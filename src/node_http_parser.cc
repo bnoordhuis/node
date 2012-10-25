@@ -81,22 +81,6 @@ static char* current_buffer_data;
 static size_t current_buffer_len;
 
 
-#define HTTP_CB(name)                                                         \
-  static int name(http_parser* p_) {                                          \
-    Parser* self = container_of(p_, Parser, parser_);                         \
-    return self->name##_();                                                   \
-  }                                                                           \
-  int name##_()
-
-
-#define HTTP_DATA_CB(name)                                                    \
-  static int name(http_parser* p_, const char* at, size_t length) {           \
-    Parser* self = container_of(p_, Parser, parser_);                         \
-    return self->name##_(at, length);                                         \
-  }                                                                           \
-  int name##_(const char* at, size_t length)
-
-
 static inline Persistent<String>
 method_to_str(unsigned short m) {
   switch (m) {
@@ -191,103 +175,113 @@ public:
   }
 
 
-  HTTP_CB(on_message_begin) {
-    num_fields_ = num_values_ = 0;
-    url_.Reset();
+  static int OnMessageBegin(http_parser* parser) {
+    Parser* self = container_of(parser, Parser, parser_);
+    self->num_fields_ = self->num_values_ = 0;
+    self->url_.Reset();
     return 0;
   }
 
 
-  HTTP_DATA_CB(on_url) {
-    url_.Update(at, length);
+  static int OnURL(http_parser* parser, const char* at, size_t length) {
+    Parser* self = container_of(parser, Parser, parser_);
+    self->url_.Update(at, length);
     return 0;
   }
 
 
-  HTTP_DATA_CB(on_header_field) {
-    if (num_fields_ == num_values_) {
+  static int OnHeaderField(http_parser* parser, const char* at, size_t length) {
+    Parser* self = container_of(parser, Parser, parser_);
+
+    if (self->num_fields_ == self->num_values_) {
       // start of new field name
-      num_fields_++;
-      if (num_fields_ == ARRAY_SIZE(fields_)) {
+      self->num_fields_++;
+      if (self->num_fields_ == ARRAY_SIZE(self->fields_)) {
         // ran out of space - flush to javascript land
-        Flush();
-        num_fields_ = 1;
-        num_values_ = 0;
+        self->Flush();
+        self->num_fields_ = 1;
+        self->num_values_ = 0;
       }
-      fields_[num_fields_ - 1].Reset();
+      self->fields_[self->num_fields_ - 1].Reset();
     }
 
-    assert(num_fields_ < (int)ARRAY_SIZE(fields_));
-    assert(num_fields_ == num_values_ + 1);
+    assert(self->num_fields_ < (int)ARRAY_SIZE(self->fields_));
+    assert(self->num_fields_ == self->num_values_ + 1);
 
-    fields_[num_fields_ - 1].Update(at, length);
+    self->fields_[self->num_fields_ - 1].Update(at, length);
 
     return 0;
   }
 
 
-  HTTP_DATA_CB(on_header_value) {
-    if (num_values_ != num_fields_) {
+  static int OnHeaderValue(http_parser* parser, const char* at, size_t length) {
+    Parser* self = container_of(parser, Parser, parser_);
+
+    if (self->num_values_ != self->num_fields_) {
       // start of new header value
-      num_values_++;
-      values_[num_values_ - 1].Reset();
+      self->num_values_++;
+      self->values_[self->num_values_ - 1].Reset();
     }
 
-    assert(num_values_ < (int)ARRAY_SIZE(values_));
-    assert(num_values_ == num_fields_);
+    assert(self->num_values_ < (int)ARRAY_SIZE(self->values_));
+    assert(self->num_values_ == self->num_fields_);
 
-    values_[num_values_ - 1].Update(at, length);
+    self->values_[self->num_values_ - 1].Update(at, length);
 
     return 0;
   }
 
 
-  HTTP_CB(on_headers_complete) {
-    Local<Value> cb = handle_->Get(on_headers_complete_sym);
+  static int OnHeadersComplete(http_parser* parser) {
+    Parser* self = container_of(parser, Parser, parser_);
 
+    Local<Value> cb = self->handle_->Get(on_headers_complete_sym);
     if (!cb->IsFunction())
       return 0;
 
     Local<Object> message_info = Object::New();
 
-    if (have_flushed_) {
+    if (self->have_flushed_) {
       // Slow case, flush remaining headers.
-      Flush();
+      self->Flush();
     }
     else {
       // Fast case, pass headers and URL to JS land.
-      message_info->Set(headers_sym, CreateHeaders());
-      if (parser_.type == HTTP_REQUEST)
-        message_info->Set(url_sym, url_.ToString());
+      message_info->Set(headers_sym, self->CreateHeaders());
+      if (self->parser_.type == HTTP_REQUEST)
+        message_info->Set(url_sym, self->url_.ToString());
     }
-    num_fields_ = num_values_ = 0;
+    self->num_fields_ = self->num_values_ = 0;
 
     // METHOD
-    if (parser_.type == HTTP_REQUEST) {
-      message_info->Set(method_sym, method_to_str(parser_.method));
+    if (self->parser_.type == HTTP_REQUEST) {
+      message_info->Set(method_sym, method_to_str(self->parser_.method));
     }
 
     // STATUS
-    if (parser_.type == HTTP_RESPONSE) {
-      message_info->Set(status_code_sym, Integer::New(parser_.status_code));
+    if (self->parser_.type == HTTP_RESPONSE) {
+      message_info->Set(status_code_sym,
+                        Integer::New(self->parser_.status_code));
     }
 
     // VERSION
-    message_info->Set(version_major_sym, Integer::New(parser_.http_major));
-    message_info->Set(version_minor_sym, Integer::New(parser_.http_minor));
+    message_info->Set(version_major_sym,
+                      Integer::New(self->parser_.http_major));
+    message_info->Set(version_minor_sym,
+                      Integer::New(self->parser_.http_minor));
 
     message_info->Set(should_keep_alive_sym,
-        http_should_keep_alive(&parser_) ? True() : False());
+                      Boolean::New(http_should_keep_alive(&self->parser_)));
 
-    message_info->Set(upgrade_sym, parser_.upgrade ? True() : False());
+    message_info->Set(upgrade_sym, Boolean::New(self->parser_.upgrade));
 
     Local<Value> argv[1] = { message_info };
 
     Local<Value> head_response =
-        Local<Function>::Cast(cb)->Call(handle_, 1, argv);
+        Local<Function>::Cast(cb)->Call(self->handle_, 1, argv);
 
     if (head_response.IsEmpty()) {
-      got_exception_ = true;
+      self->got_exception_ = true;
       return -1;
     }
 
@@ -295,10 +289,11 @@ public:
   }
 
 
-  HTTP_DATA_CB(on_body) {
+  static int OnBody(http_parser* parser, const char* at, size_t length) {
+    Parser* self = container_of(parser, Parser, parser_);
     HandleScope scope;
 
-    Local<Value> cb = handle_->Get(on_body_sym);
+    Local<Value> cb = self->handle_->Get(on_body_sym);
     if (!cb->IsFunction())
       return 0;
 
@@ -308,10 +303,10 @@ public:
       Integer::New(length)
     };
 
-    Local<Value> r = Local<Function>::Cast(cb)->Call(handle_, 3, argv);
+    Local<Value> r = Local<Function>::Cast(cb)->Call(self->handle_, 3, argv);
 
     if (r.IsEmpty()) {
-      got_exception_ = true;
+      self->got_exception_ = true;
       return -1;
     }
 
@@ -319,21 +314,22 @@ public:
   }
 
 
-  HTTP_CB(on_message_complete) {
+  static int OnMessageComplete(http_parser* parser) {
+    Parser* self = container_of(parser, Parser, parser_);
     HandleScope scope;
 
-    if (num_fields_)
-      Flush(); // Flush trailing HTTP headers.
+    if (self->num_fields_)
+      self->Flush(); // Flush trailing HTTP headers.
 
-    Local<Value> cb = handle_->Get(on_message_complete_sym);
+    Local<Value> cb = self->handle_->Get(on_message_complete_sym);
 
     if (!cb->IsFunction())
       return 0;
 
-    Local<Value> r = Local<Function>::Cast(cb)->Call(handle_, 0, NULL);
+    Local<Value> r = Local<Function>::Cast(cb)->Call(self->handle_, 0, NULL);
 
     if (r.IsEmpty()) {
-      got_exception_ = true;
+      self->got_exception_ = true;
       return -1;
     }
 
@@ -587,13 +583,13 @@ void InitHttpParser(Handle<Object> target) {
   headers_sym = NODE_PSYMBOL("headers");
   url_sym = NODE_PSYMBOL("url");
 
-  settings.on_message_begin    = Parser::on_message_begin;
-  settings.on_url              = Parser::on_url;
-  settings.on_header_field     = Parser::on_header_field;
-  settings.on_header_value     = Parser::on_header_value;
-  settings.on_headers_complete = Parser::on_headers_complete;
-  settings.on_body             = Parser::on_body;
-  settings.on_message_complete = Parser::on_message_complete;
+  settings.on_message_begin    = Parser::OnMessageBegin;
+  settings.on_url              = Parser::OnURL;
+  settings.on_header_field     = Parser::OnHeaderField;
+  settings.on_header_value     = Parser::OnHeaderValue;
+  settings.on_headers_complete = Parser::OnHeadersComplete;
+  settings.on_body             = Parser::OnBody;
+  settings.on_message_complete = Parser::OnMessageComplete;
 }
 
 }  // namespace node
