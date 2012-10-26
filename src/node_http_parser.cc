@@ -61,8 +61,6 @@ static Persistent<String> version_major_sym;
 static Persistent<String> version_minor_sym;
 static Persistent<String> should_keep_alive_sym;
 static Persistent<String> upgrade_sym;
-static Persistent<String> headers_sym;
-static Persistent<String> url_sym;
 
 static Persistent<String> unknown_method_sym;
 
@@ -92,144 +90,86 @@ method_to_str(unsigned short m) {
 }
 
 
-// helper class for the Parser
-struct StringPtr {
-  StringPtr() {
-    on_heap_ = false;
-    Reset();
-  }
-
-
-  ~StringPtr() {
-    Reset();
-  }
-
-
-  // If str_ does not point to a heap string yet, this function makes it do
-  // so. This is called at the end of each http_parser_execute() so as not
-  // to leak references. See issue #2438 and test-http-parser-bad-ref.js.
-  void Save() {
-    if (!on_heap_ && size_ > 0) {
-      char* s = new char[size_];
-      memcpy(s, str_, size_);
-      str_ = s;
-      on_heap_ = true;
-    }
-  }
-
-
-  void Reset() {
-    if (on_heap_) {
-      delete[] str_;
-      on_heap_ = false;
-    }
-
-    str_ = NULL;
-    size_ = 0;
-  }
-
-
-  void Update(const char* str, size_t size) {
-    if (str_ == NULL)
-      str_ = str;
-    else if (on_heap_ || str_ + size_ != str) {
-      // Non-consecutive input, make a copy on the heap.
-      // TODO Use slab allocation, O(n) allocs is bad.
-      char* s = new char[size_ + size];
-      memcpy(s, str_, size_);
-      memcpy(s + size_, str, size);
-
-      if (on_heap_)
-        delete[] str_;
-      else
-        on_heap_ = true;
-
-      str_ = s;
-    }
-    size_ += size;
-  }
-
-
-  Local<String> ToString() const {
-    if (str_)
-      return String::New(str_, size_);
-    else
-      return String::Empty();
-  }
-
-
-  const char* str_;
-  bool on_heap_;
-  size_t size_;
-};
-
-
 class Parser : public ObjectWrap {
 public:
   Parser(enum http_parser_type type) : ObjectWrap() {
+    static Persistent<Function> uint32_array_constructor;
+    HandleScope scope;
+
+    // XXX Make v8_typed_array.h export the constructor?
+    if (uint32_array_constructor.IsEmpty()) {
+      Local<String> name = String::New("Uint32Array");
+      Local<Value> obj = Context::GetCurrent()->Global()->Get(name);
+      assert(!obj.IsEmpty() && "Uint32Array: type not found");
+      assert(obj->IsFunction() && "Uint32Array: not a constructor");
+      uint32_array_constructor = Persistent<Function>::New(obj.As<Function>());
+    }
+
+    Local<Value> size = Integer::NewFromUnsigned(kMaxHeaderValues);
+    array_ = Persistent<Object>::New(
+        uint32_array_constructor->NewInstance(1, &size));
+    offsets_ = static_cast<uint32_t*>(
+        array_->GetIndexedPropertiesExternalArrayData());
+
     Init(type);
   }
 
 
   ~Parser() {
+    array_.Dispose();
+    array_.Clear();
   }
 
 
   static int OnMessageBegin(http_parser* parser) {
     Parser* self = container_of(parser, Parser, parser_);
-    self->num_fields_ = self->num_values_ = 0;
-    self->url_.Reset();
+    self->prev_header_state_ = NONE;
+    self->index_ = 0;
     return 0;
   }
 
 
-  static int OnURL(http_parser* parser, const char* at, size_t length) {
+  enum HeaderState { NONE, URL, FIELD, VALUE };
+  HeaderState prev_header_state_;
+
+
+  static int OnHeaderData(HeaderState state,
+                          http_parser* parser,
+                          const char* at,
+                          size_t length) {
+    assert(at >= current_buffer_data);
+    assert(at + length <= current_buffer_data + current_buffer_len);
+
     Parser* self = container_of(parser, Parser, parser_);
-    self->url_.Update(at, length);
-    return 0;
-  }
 
-
-  static int OnHeaderField(http_parser* parser, const char* at, size_t length) {
-    Parser* self = container_of(parser, Parser, parser_);
-
-    if (self->num_fields_ == self->num_values_) {
-      // start of new field name
-      self->num_fields_++;
-      if (self->num_fields_ == ARRAY_SIZE(self->fields_)) {
-        // ran out of space - flush to javascript land
+    if (state != self->prev_header_state_) {
+      if (self->prev_header_state_ != NONE &&
+          ++self->index_ == kMaxHeaderValues) {
         self->Flush();
-        self->num_fields_ = 1;
-        self->num_values_ = 0;
+        self->index_ = 0;
       }
-      self->fields_[self->num_fields_ - 1].Reset();
+      assert(self->index_ % 2 == 0);
+      self->prev_header_state_ = state;
+      //printf("self->offsets_[%d] = %d\n", (int) self->index_, (int) (at - current_buffer_data));
+      self->offsets_[self->index_++] = (at - current_buffer_data);
     }
-
-    assert(self->num_fields_ < (int)ARRAY_SIZE(self->fields_));
-    assert(self->num_fields_ == self->num_values_ + 1);
-
-    self->fields_[self->num_fields_ - 1].Update(at, length);
+    //printf("self->offsets_[%d] = %d \"%.*s\"\n", (int) self->index_, (int) ((at - current_buffer_data) + length), (int) length, at);
+    self->offsets_[self->index_] = (at - current_buffer_data) + length;
 
     return 0;
   }
 
 
-  static int OnHeaderValue(http_parser* parser, const char* at, size_t length) {
-    Parser* self = container_of(parser, Parser, parser_);
-
-    if (self->num_values_ != self->num_fields_) {
-      // start of new header value
-      self->num_values_++;
-      self->values_[self->num_values_ - 1].Reset();
-    }
-
-    assert(self->num_values_ < (int)ARRAY_SIZE(self->values_));
-    assert(self->num_values_ == self->num_fields_);
-
-    self->values_[self->num_values_ - 1].Update(at, length);
-
-    return 0;
+#define X(name, state)                                                        \
+  static int name(http_parser* parser, const char* at, size_t length) {       \
+    return OnHeaderData(state, parser, at, length);                           \
   }
+
+X(OnURL, URL)
+X(OnHeaderField, FIELD)
+X(OnHeaderValue, VALUE)
+
+#undef X
 
 
   static int OnHeadersComplete(http_parser* parser) {
@@ -244,14 +184,8 @@ public:
     if (self->have_flushed_) {
       // Slow case, flush remaining headers.
       self->Flush();
+      self->index_ = 0;
     }
-    else {
-      // Fast case, pass headers and URL to JS land.
-      message_info->Set(headers_sym, self->CreateHeaders());
-      if (self->parser_.type == HTTP_REQUEST)
-        message_info->Set(url_sym, self->url_.ToString());
-    }
-    self->num_fields_ = self->num_values_ = 0;
 
     // METHOD
     if (self->parser_.type == HTTP_REQUEST) {
@@ -275,10 +209,20 @@ public:
 
     message_info->Set(upgrade_sym, Boolean::New(self->parser_.upgrade));
 
-    Local<Value> argv[1] = { message_info };
+    bool has_url = self->parser_.type == HTTP_REQUEST &&
+                   self->have_flushed_ == false;
+
+    Local<Value> argv[] = {
+      message_info,
+      *current_buffer,
+      *self->array_,
+      Integer::NewFromUnsigned(self->index_ + 1),
+      Local<Boolean>::New(Boolean::New(has_url)),
+    };
+    self->index_ = 0;
 
     Local<Value> head_response =
-        Local<Function>::Cast(cb)->Call(self->handle_, 1, argv);
+        Local<Function>::Cast(cb)->Call(self->handle_, ARRAY_SIZE(argv), argv);
 
     if (head_response.IsEmpty()) {
       self->got_exception_ = true;
@@ -290,6 +234,9 @@ public:
 
 
   static int OnBody(http_parser* parser, const char* at, size_t length) {
+    assert(at >= current_buffer_data);
+    assert(at + length <= current_buffer_data + current_buffer_len);
+
     Parser* self = container_of(parser, Parser, parser_);
     HandleScope scope;
 
@@ -318,7 +265,7 @@ public:
     Parser* self = container_of(parser, Parser, parser_);
     HandleScope scope;
 
-    if (self->num_fields_)
+    if (self->index_ != 0)
       self->Flush(); // Flush trailing HTTP headers.
 
     Local<Value> cb = self->handle_->Get(on_message_complete_sym);
@@ -352,19 +299,6 @@ public:
     parser->Wrap(args.This());
 
     return args.This();
-  }
-
-
-  void Save() {
-    url_.Save();
-
-    for (int i = 0; i < num_fields_; i++) {
-      fields_[i].Save();
-    }
-
-    for (int i = 0; i < num_values_; i++) {
-      values_[i].Save();
-    }
   }
 
 
@@ -413,8 +347,6 @@ public:
 
     size_t nparsed =
       http_parser_execute(&parser->parser_, &settings, buffer_data + off, len);
-
-    parser->Save();
 
     // Unassign the 'buffer_' variable
     assert(current_buffer);
@@ -486,21 +418,6 @@ public:
 
 
 private:
-
-  Local<Array> CreateHeaders() {
-    // num_values_ is either -1 or the entry # of the last header
-    // so num_values_ == 0 means there's a single header
-    Local<Array> headers = Array::New(2 * num_values_);
-
-    for (int i = 0; i < num_values_; ++i) {
-      headers->Set(2 * i, fields_[i].ToString());
-      headers->Set(2 * i + 1, values_[i].ToString());
-    }
-
-    return headers;
-  }
-
-
   // spill headers and request path to JS land
   void Flush() {
     HandleScope scope;
@@ -510,37 +427,40 @@ private:
     if (!cb->IsFunction())
       return;
 
-    Local<Value> argv[2] = {
-      CreateHeaders(),
-      url_.ToString()
+    bool has_url = parser_.type == HTTP_REQUEST && have_flushed_ == false;
+
+    Local<Value> argv[] = {
+      *current_buffer,
+      *array_,
+      Integer::NewFromUnsigned(index_),
+      Local<Boolean>::New(Boolean::New(has_url))
     };
 
-    Local<Value> r = Local<Function>::Cast(cb)->Call(handle_, 2, argv);
+    Local<Value> r = Local<Function>::Cast(cb)->Call(handle_,
+                                                     ARRAY_SIZE(argv),
+                                                     argv);
 
     if (r.IsEmpty())
       got_exception_ = true;
 
-    url_.Reset();
     have_flushed_ = true;
   }
 
 
   void Init(enum http_parser_type type) {
     http_parser_init(&parser_, type);
-    url_.Reset();
-    num_fields_ = 0;
-    num_values_ = 0;
+    index_ = 0;
     have_flushed_ = false;
     got_exception_ = false;
   }
 
 
+  static const unsigned int kMaxHeaderValues = 64;
+  Persistent<Object> array_; // Uint32Array
+  // 0-1=url, 2-3=header name, 4-5=header value, 6-7=header name, etc.
+  uint32_t* offsets_;
+  unsigned int index_;
   http_parser parser_;
-  StringPtr fields_[32];  // header fields
-  StringPtr values_[32];  // header values
-  StringPtr url_;
-  int num_fields_;
-  int num_values_;
   bool have_flushed_;
   bool got_exception_;
 };
@@ -580,8 +500,6 @@ void InitHttpParser(Handle<Object> target) {
   version_minor_sym = NODE_PSYMBOL("versionMinor");
   should_keep_alive_sym = NODE_PSYMBOL("shouldKeepAlive");
   upgrade_sym = NODE_PSYMBOL("upgrade");
-  headers_sym = NODE_PSYMBOL("headers");
-  url_sym = NODE_PSYMBOL("url");
 
   settings.on_message_begin    = Parser::OnMessageBegin;
   settings.on_url              = Parser::OnURL;
