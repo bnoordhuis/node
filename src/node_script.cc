@@ -432,7 +432,18 @@ Handle<Value> WrappedScript::EvalMachine(const Arguments& args) {
 
   if (context_flag == userContext || context_flag == newContext) {
     // success! copy changes back onto the sandbox object.
-    CloneObject(args.This(), context->Global()->GetPrototype(), sandbox);
+    Local<Value> prototype_v = context->Global()->GetPrototype();
+    assert(prototype_v->IsObject());
+    Local<Object> prototype = prototype_v.As<Object>();
+
+    CloneObject(args.This(), prototype, sandbox);
+
+    // Clean out the prototype object again. Avoids memory leaks when there
+    // are cyclic references between the context and the outside world.
+    Local<Array> property_names = prototype->GetPropertyNames();
+    for (unsigned int i = 0, k = property_names->Length(); i < k; i++) {
+      prototype->ForceDelete(property_names->Get(i));
+    }
   }
 
   return result == args.This() ? result : scope.Close(result);
