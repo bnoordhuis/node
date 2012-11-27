@@ -48,16 +48,19 @@ using namespace v8;
 
 #define THROW_BAD_ARGS TYPE_ERROR("Bad argument")
 
-class FSReqWrap: public ReqWrap<uv_fs_t> {
- public:
+struct  FSReqWrap: public ReqWrap<uv_fs_t> {
   FSReqWrap(const char* syscall)
-    : syscall_(syscall) {
+    : syscall_(syscall)
+    , new_path_(NULL)
+  {
   }
 
-  const char* syscall() { return syscall_; }
+  ~FSReqWrap() {
+    free(new_path_);
+  }
 
- private:
   const char* syscall_;
+  char* new_path_;  // Set by Link() and Symlink().
 };
 
 
@@ -99,18 +102,14 @@ static void After(uv_fs_t *req) {
   // NOTE: This may be needed to be changed if something returns a -1
   // for a success, which is possible.
   if (req->result == -1) {
-    // If the request doesn't have a path parameter set.
+    const char* path = req->path;
 
-    if (!req->path) {
-      argv[0] = UVException(req->errorno,
-                            NULL,
-                            req_wrap->syscall());
-    } else {
-      argv[0] = UVException(req->errorno,
-                            NULL,
-                            req_wrap->syscall(),
-                            static_cast<const char*>(req->path));
+    if ((req->fs_type == UV_FS_LINK || req->fs_type == UV_FS_SYMLINK) &&
+        req->errorno == UV_EEXIST) {
+      path = req_wrap->new_path_;
     }
+
+    argv[0] = UVException(req->errorno, NULL, req_wrap->syscall_, path);
   } else {
     // error value is empty or null for non-error.
     argv[0] = Local<Value>::New(Null());
@@ -217,7 +216,7 @@ struct fs_req_wrap {
 };
 
 
-#define ASYNC_CALL(func, callback, ...)                           \
+#define __ASYNC_CALL(do_ret, func, callback, ...)                 \
   FSReqWrap* req_wrap = new FSReqWrap(#func);                     \
   int r = uv_fs_##func(uv_default_loop(), &req_wrap->req_,        \
       __VA_ARGS__, After);                                        \
@@ -230,7 +229,10 @@ struct fs_req_wrap {
     req->errorno = uv_last_error(uv_default_loop()).code;         \
     After(req);                                                   \
   }                                                               \
-  return scope.Close(req_wrap->object_);
+  if (do_ret) return scope.Close(req_wrap->object_);
+
+#define ASYNC_CALL(func, callback, ...)                           \
+  __ASYNC_CALL(true, func, callback, __VA_ARGS__)
 
 #define SYNC_CALL(func, path, ...)                                \
   fs_req_wrap req_wrap;                                           \
@@ -419,8 +421,8 @@ static Handle<Value> Symlink(const Arguments& args) {
   if (!args[0]->IsString()) return TYPE_ERROR("dest path must be a string");
   if (!args[1]->IsString()) return TYPE_ERROR("src path must be a string");
 
-  String::Utf8Value dest(args[0]);
-  String::Utf8Value path(args[1]);
+  String::Utf8Value orig_path(args[0]);
+  String::Utf8Value new_path(args[1]);
   int flags = 0;
 
   if (args[2]->IsString()) {
@@ -436,9 +438,21 @@ static Handle<Value> Symlink(const Arguments& args) {
   }
 
   if (args[3]->IsFunction()) {
-    ASYNC_CALL(symlink, args[3], *dest, *path, flags)
+    __ASYNC_CALL(false, symlink, args[3], *orig_path, *new_path, flags);
+    req_wrap->new_path_ = strdup(*new_path);
+    return scope.Close(req_wrap->object_);
   } else {
-    SYNC_CALL(symlink, *path, *dest, *path, flags)
+    fs_req_wrap req_wrap;
+    int result = uv_fs_link(uv_default_loop(),
+                            &req_wrap.req,
+                            *orig_path,
+                            *new_path,
+                            NULL);
+    if (result < 0) {
+      uv_err_code code = uv_last_error(uv_default_loop()).code;
+      const char* what = (code == UV_EEXIST) ? *new_path : *orig_path;
+      return ThrowException(UVException(code, "link", "", what));
+    }
     return Undefined();
   }
 }
@@ -456,9 +470,21 @@ static Handle<Value> Link(const Arguments& args) {
   String::Utf8Value new_path(args[1]);
 
   if (args[2]->IsFunction()) {
-    ASYNC_CALL(link, args[2], *orig_path, *new_path)
+    __ASYNC_CALL(false, link, args[2], *orig_path, *new_path);
+    req_wrap->new_path_ = strdup(*new_path);
+    return scope.Close(req_wrap->object_);
   } else {
-    SYNC_CALL(link, *orig_path, *orig_path, *new_path)
+    fs_req_wrap req_wrap;
+    int result = uv_fs_link(uv_default_loop(),
+                            &req_wrap.req,
+                            *orig_path,
+                            *new_path,
+                            NULL);
+    if (result < 0) {
+      uv_err_code code = uv_last_error(uv_default_loop()).code;
+      const char* what = (code == UV_EEXIST) ? *new_path : *orig_path;
+      return ThrowException(UVException(code, "link", "", what));
+    }
     return Undefined();
   }
 }

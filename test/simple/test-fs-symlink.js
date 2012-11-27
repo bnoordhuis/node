@@ -25,11 +25,16 @@ var path = require('path');
 var fs = require('fs');
 var exec = require('child_process').exec;
 var completed = 0;
-var expected_tests = 2;
+var expected_tests = 4;
 
 var is_windows = process.platform === 'win32';
 
 var runtest = function(skip_symlinks) {
+  var oldPath = path.join(common.tmpDir, 'old');
+  var newPath = path.join(common.tmpDir, 'new');
+  fs.writeFileSync(oldPath, '');
+  fs.writeFileSync(newPath, '');
+
   if (!skip_symlinks) {
     // test creating and reading symbolic link
     var linkData = path.join(common.fixturesDir, '/cycles/root.js');
@@ -50,6 +55,25 @@ var runtest = function(skip_symlinks) {
         completed++;
       });
     });
+
+    // EEXIST errors should point to newPath.
+    fs.symlink(oldPath, newPath, common.mustCall(function(err) {
+      assert.equal(err.code, 'EEXIST');
+      assert.equal(err.path, newPath);
+      completed++;
+    }));
+
+    (function() {
+      var caught = false;
+      try {
+        fs.symlinkSync(oldPath, newPath);
+      } catch (err) {
+        assert.equal(err.code, 'EEXIST');
+        assert.equal(err.path, newPath);
+        caught = true;
+      }
+      assert(caught);
+    })();
   }
 
   // test creating and reading hard link
@@ -69,6 +93,25 @@ var runtest = function(skip_symlinks) {
     assert.equal(srcContent, dstContent);
     completed++;
   });
+
+  // EEXIST errors should point to newPath.
+  fs.link(oldPath, newPath, common.mustCall(function(err) {
+    assert.equal(err.code, 'EEXIST');
+    assert.equal(err.path, newPath);
+    completed++;
+  }));
+
+  (function() {
+    var caught = false;
+    try {
+      fs.linkSync(oldPath, newPath);
+    } catch (err) {
+      assert.equal(err.code, 'EEXIST');
+      assert.equal(err.path, newPath);
+      caught = true;
+    }
+    assert(caught);
+  })();
 };
 
 if (is_windows) {
