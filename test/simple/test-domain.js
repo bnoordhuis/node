@@ -69,26 +69,6 @@ d.on('error', function(er) {
       assert.equal(er.domain_thrown, true);
       break;
 
-    case "ENOENT, open 'this file does not exist'":
-      assert.equal(er.domain, d);
-      assert.equal(er.domain_thrown, false);
-      assert.equal(typeof er.domain_bound, 'function');
-      assert.ok(!er.domain_emitter);
-      assert.equal(er.code, 'ENOENT');
-      assert.equal(er_path, 'this file does not exist');
-      assert.equal(typeof er.errno, 'number');
-      break;
-
-    case "ENOENT, open 'stream for nonexistent file'":
-      assert.equal(typeof er.errno, 'number');
-      assert.equal(er.code, 'ENOENT');
-      assert.equal(er_path, 'stream for nonexistent file');
-      assert.equal(er.domain, d);
-      assert.equal(er.domain_emitter, fst);
-      assert.ok(!er.domain_bound);
-      assert.equal(er.domain_thrown, false);
-      break;
-
     case 'implicit':
       assert.equal(er.domain_emitter, implicit);
       assert.equal(er.domain, d);
@@ -110,6 +90,28 @@ d.on('error', function(er) {
       break;
 
     default:
+      if (/ENOENT, open '.*\/this file does not exist'/.test(er_message)) {
+        assert.equal(er.domain, d);
+        assert.equal(er.domain_thrown, false);
+        assert.equal(typeof er.domain_bound, 'function');
+        assert.ok(!er.domain_emitter);
+        assert.equal(er.code, 'ENOENT');
+        assert.equal(/this file does not exist/.test(er_path), true);
+        assert.equal(typeof er.errno, 'number');
+        break;
+      }
+
+      if (/ENOENT, open '.*\/stream for nonexistent file'/.test(er_message)) {
+        assert.equal(typeof er.errno, 'number');
+        assert.equal(er.code, 'ENOENT');
+        assert.equal(/stream for nonexistent file/.test(er_path), true);
+        assert.equal(er.domain, d);
+        assert.equal(er.domain_emitter, fst);
+        assert.ok(!er.domain_bound);
+        assert.equal(er.domain_thrown, false);
+        break;
+      }
+
       console.error('unexpected error, throwing %j', er.message);
       throw er;
   }
