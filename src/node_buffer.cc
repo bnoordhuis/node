@@ -32,7 +32,6 @@
 
 #ifdef __POSIX__
 # include <sys/mman.h>  // mmap
-# include <unistd.h>    // sysconf
 # include <stdio.h>     // perror
 #endif
 
@@ -210,8 +209,12 @@ static char* cached_pool_buffers[16];
 
 
 static inline void free_buf_mem(char* buf, size_t len) {
-  if (len == Buffer::kPoolSize &&
-      num_pool_buffers < ARRAY_SIZE(cached_pool_buffers)) {
+  if (len != Buffer::kPoolSize) {
+    delete[] buf;
+    return;
+  }
+
+  if (num_pool_buffers < ARRAY_SIZE(cached_pool_buffers)) {
     cached_pool_buffers[num_pool_buffers++] = buf;
     return;
   }
@@ -224,10 +227,11 @@ static inline void free_buf_mem(char* buf, size_t len) {
 
 
 static inline char* alloc_buf_mem(size_t len) {
-  size_t pagesize = sysconf(_SC_PAGESIZE);
+  if (len != Buffer::kPoolSize) {
+    return new char[len];
+  }
 
-  len = ROUND_UP(len, pagesize);
-  if (len == Buffer::kPoolSize && num_pool_buffers > 0) {
+  if (num_pool_buffers > 0) {
     return cached_pool_buffers[--num_pool_buffers];
   }
 
