@@ -68,8 +68,13 @@ class NODE_EXTERN Buffer: public ObjectWrap {
   // mirrors deps/v8/src/objects.h
   static const unsigned int kMaxLength = 0x3fffffff;
 
-  // exported in lib/buffer.js as Buffer.poolSize
-  static const unsigned int kPoolSize = 32768;
+  // Exported in lib/buffer.js as Buffer.poolSize. It's this big for two
+  // reasons:
+  //
+  // 1) It reduces the number of mmap() syscalls we have to make.
+  // 2) It gives the kernel a fighting chance to map it as two huge pages
+  //    instead of myriads of 4 kB pages.
+  static const unsigned int kPoolSize = 8 * 1024 * 1024;
 
   static v8::Persistent<v8::FunctionTemplate> constructor_template;
 

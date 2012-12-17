@@ -19,6 +19,8 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+// Flags: --expose_gc
+
 var common = require('../common');
 var assert = require('assert');
 
@@ -31,7 +33,8 @@ function alloc() {
 alloc();
 alloc();
 alloc();
+gc();
 
 // Note: this assertion fails when run under valgrind because valgrind
 // increases the RSS footprint of node with at least 50 MB.
-assert(process.memoryUsage().rss < 32*1024*1024);
+assert(process.memoryUsage().rss < 64*1024*1024);

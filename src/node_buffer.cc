@@ -205,7 +205,7 @@ Buffer::~Buffer() {
 #if defined(__POSIX__)
 
 static unsigned int num_pool_buffers;
-static char* cached_pool_buffers[16];
+static char* cached_pool_buffers[4];
 
 
 static inline void free_buf_mem(char* buf, size_t len) {
