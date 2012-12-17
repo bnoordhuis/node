@@ -237,6 +237,14 @@ static inline char* alloc_buf_mem(size_t len) {
 
   int prot = PROT_READ | PROT_WRITE;
   int flags = MAP_ANON | MAP_PRIVATE;  // OS X doesn't know MAP_ANONYMOUS...
+
+#if defined(MAP_POPULATE)
+  // Prefault pages. Gives a 8-10% speedup on some benchmarks. It remains to be
+  // investigated what the consequences are on systems with high VM pressure.
+  // Optimize for the general case for now, not the fringe case.
+  flags |= MAP_POPULATE;
+#endif
+
   char* buf = static_cast<char*>(mmap(NULL, len, prot, flags, -1, 0));
 
   if (buf == NULL) {
