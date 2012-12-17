@@ -28,8 +28,6 @@
 
 #include <stdlib.h>
 
-#define SLAB_SIZE (1024 * 1024)
-
 // Temporary hack: libuv should provide uv_inet_pton and uv_inet_ntop.
 // Clean this up in tcp_wrap.cc too.
 #if defined(__MINGW32__) || defined(_MSC_VER)
@@ -82,7 +80,7 @@ UDPWrap::~UDPWrap() {
 void UDPWrap::Initialize(Handle<Object> target) {
   HandleWrap::Initialize(target);
 
-  slab_allocator = new SlabAllocator(SLAB_SIZE);
+  slab_allocator = new SlabAllocator;
   AtExit(DeleteSlabAllocator, NULL);
 
   HandleScope scope;

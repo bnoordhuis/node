@@ -31,8 +31,6 @@
 #include <stdlib.h> // abort()
 #include <limits.h> // INT_MAX
 
-#define SLAB_SIZE (1024 * 1024)
-
 
 namespace node {
 
@@ -90,7 +88,7 @@ void StreamWrap::Initialize(Handle<Object> target) {
   if (initialized) return;
   initialized = true;
 
-  slab_allocator = new SlabAllocator(SLAB_SIZE);
+  slab_allocator = new SlabAllocator;
   AtExit(DeleteSlabAllocator, NULL);
 
   HandleScope scope;

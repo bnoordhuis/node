@@ -19,13 +19,14 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+#include "node_buffer.h"  // Buffer::kPoolSize
 #include "v8.h"
 
 namespace node {
 
 class SlabAllocator {
 public:
-  SlabAllocator(unsigned int size = 10485760); // default to 10M
+  SlabAllocator(unsigned int size = Buffer::kPoolSize);
   ~SlabAllocator();
 
   // allocate memory from slab, attaches the slice to `obj`
