@@ -43,7 +43,7 @@
     # access is allowed for all CPUs.
     'v8_can_use_unaligned_accesses%': 'default',
 
-    # Setting 'v8_can_use_vfp2_instructions' to 'true' will enable use of ARM VFP
+    # Setting 'v8_can_use_vfp_instructions' to 'true' will enable use of ARM VFP
     # instructions in the V8 generated code. VFP instructions will be enabled
     # both for the snapshot and for the ARM target. Leaving the default value
     # of 'false' will avoid VFP instructions in the snapshot and use CPU feature
@@ -69,6 +69,9 @@
     'v8_enable_debugger_support%': 1,
 
     'v8_enable_disassembler%': 0,
+
+    # Enable extra checks in API functions and other strategic places.
+    'v8_enable_extra_checks%': 1,
 
     'v8_object_print%': 0,
 
@@ -96,6 +99,13 @@
 
     # For a shared library build, results in "libv8-<(soname_version).so".
     'soname_version%': '',
+
+    # Interpreted regexp engine exists as platform-independent alternative
+    # based where the regular expression is compiled to a bytecode.
+    'v8_interpreted_regexp%': 0,
+
+    # Name of the python executable.
+    'python%': 'python',
   },
   'target_defaults': {
     'conditions': [
@@ -105,11 +115,17 @@
       ['v8_enable_disassembler==1', {
         'defines': ['ENABLE_DISASSEMBLER',],
       }],
+      ['v8_enable_extra_checks==1', {
+        'defines': ['ENABLE_EXTRA_CHECKS',],
+      }],
       ['v8_object_print==1', {
         'defines': ['OBJECT_PRINT',],
       }],
       ['v8_enable_gdbjit==1', {
         'defines': ['ENABLE_GDB_JIT_INTERFACE',],
+      }],
+      ['v8_interpreted_regexp==1', {
+        'defines': ['V8_INTERPRETED_REGEXP',],
       }],
       ['v8_target_arch=="arm"', {
         'defines': [
@@ -139,7 +155,7 @@
           [ 'v8_use_arm_eabi_hardfloat=="true"', {
             'defines': [
               'USE_EABI_HARDFLOAT=1',
-              'CAN_USE_VFP2_INSTRUCTIONS',
+              'CAN_USE_VFP3_INSTRUCTIONS',
             ],
             'target_conditions': [
               ['_toolset=="target"', {
@@ -158,12 +174,12 @@
           'V8_TARGET_ARCH_IA32',
         ],
       }],  # v8_target_arch=="ia32"
-      ['v8_target_arch=="mips"', {
+      ['v8_target_arch=="mipsel"', {
         'defines': [
           'V8_TARGET_ARCH_MIPS',
         ],
         'variables': {
-          'mipscompiler': '<!($(echo ${CXX:-$(which g++)}) -v 2>&1 | grep -q "^Target: mips-" && echo "yes" || echo "no")',
+          'mipscompiler': '<!($(echo ${CXX:-$(which g++)}) -v 2>&1 | grep -q "^Target: mips" && echo "yes" || echo "no")',
         },
         'conditions': [
           ['mipscompiler=="yes"', {
@@ -213,7 +229,7 @@
             'defines': ['_MIPS_ARCH_LOONGSON',],
           }],
         ],
-      }],  # v8_target_arch=="mips"
+      }],  # v8_target_arch=="mipsel"
       ['v8_target_arch=="x64"', {
         'defines': [
           'V8_TARGET_ARCH_X64',
@@ -226,6 +242,7 @@
             'StackReserveSize': '2097152',
           },
         },
+        'msvs_configuration_platform': 'x64',
       }],  # v8_target_arch=="x64"
       ['v8_use_liveobjectlist=="true"', {
         'defines': [
@@ -257,8 +274,7 @@
           },
         },
       }],
-      ['OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="solaris" \
-         or OS=="netbsd"', {
+      ['OS in "linux freebsd dragonflybsd openbsd solaris netbsd".split()', {
         'conditions': [
           [ 'v8_no_strict_aliasing==1', {
             'cflags': [ '-fno-strict-aliasing' ],
@@ -268,10 +284,10 @@
       ['OS=="solaris"', {
         'defines': [ '__C99FEATURES__=1' ],  # isinf() etc.
       }],
-      ['(OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="solaris" \
-         or OS=="netbsd" or OS=="mac" or OS=="android") and \
+      ['(OS=="linux" or OS=="freebsd" or OS=="dragonflybsd" or OS=="openbsd" \
+         or OS=="solaris" or OS=="netbsd" or OS=="mac" or OS=="android") and \
         (v8_target_arch=="arm" or v8_target_arch=="ia32" or \
-         v8_target_arch=="mips")', {
+         v8_target_arch=="mipsel")', {
         # Check whether the host compiler and target compiler support the
         # '-m32' option and set it if so.
         'target_conditions': [
@@ -297,7 +313,7 @@
           }],
         ],
       }],
-      ['OS=="freebsd" or OS=="openbsd"', {
+      ['OS=="freebsd" or OS=="dragonflybsd" or OS=="openbsd"', {
         'cflags': [ '-I/usr/local/include' ],
       }],
       ['OS=="netbsd"', {
@@ -329,16 +345,30 @@
           },
         },
         'conditions': [
-          ['OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="netbsd"', {
+          ['OS in "linux freebsd dragonflybsd openbsd netbsd".split()', {
             'cflags': [ '-Wall', '<(werror)', '-W', '-Wno-unused-parameter',
                         '-Wnon-virtual-dtor', '-Woverloaded-virtual' ],
+          }],
+          ['OS=="android"', {
+            'variables': {
+              'android_full_debug%': 1,
+            },
+            'conditions': [
+              ['android_full_debug==0', {
+                # Disable full debug if we want a faster v8 in a debug build.
+                # TODO(2304): pass DISABLE_DEBUG_ASSERT instead of hiding DEBUG.
+                'defines!': [
+                  'DEBUG',
+                ],
+              }],
+            ],
           }],
         ],
       },  # Debug
       'Release': {
         'conditions': [
-          ['OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="netbsd" \
-            or OS=="android"', {
+          ['OS=="linux" or OS=="freebsd" or OS=="dragonflybsd" \
+            or OS=="openbsd" or OS=="netbsd" or OS=="android"', {
             'conditions': [
               [ 'gcc_version==44 and clang==0', {
                 'cflags': [
@@ -366,14 +396,16 @@
                 'InlineFunctionExpansion': '2',
                 'EnableIntrinsicFunctions': 'true',
                 'FavorSizeOrSpeed': '0',
-                'OmitFramePointers': 'true',
                 'StringPooling': 'true',
-
                 'conditions': [
                   ['OS=="win" and component=="shared_library"', {
                     'RuntimeLibrary': '2',  #/MD
                   }, {
                     'RuntimeLibrary': '0',  #/MT
+                  }],
+                  ['v8_target_arch=="x64"', {
+                    # TODO(2207): remove this option once the bug is fixed.
+                    'WholeProgramOptimization': 'true',
                   }],
                 ],
               },
