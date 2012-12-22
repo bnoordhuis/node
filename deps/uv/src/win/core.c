@@ -69,6 +69,9 @@ static void uv_init(void) {
   /* Initialize FS */
   uv_fs_init();
 
+  /* Initialize signal stuff */
+  uv_signals_init();
+
   /* Initialize console */
   uv_console_init();
 
@@ -109,15 +112,10 @@ static void uv_loop_init(uv_loop_t* loop) {
 
   memset(&loop->poll_peer_sockets, 0, sizeof loop->poll_peer_sockets);
 
-  loop->channel = NULL;
-  RB_INIT(&loop->ares_handles);
-
   loop->active_tcp_streams = 0;
   loop->active_udp_streams = 0;
 
   loop->last_err = uv_ok_;
-
-  memset(&loop->counters, 0, sizeof loop->counters);
 }
 
 
@@ -170,6 +168,16 @@ void uv_loop_delete(uv_loop_t* loop) {
 
     free(loop);
   }
+}
+
+
+int uv_backend_fd(const uv_loop_t* loop) {
+  return -1;
+}
+
+
+int uv_backend_timeout(const uv_loop_t* loop) {
+  return 0;
 }
 
 

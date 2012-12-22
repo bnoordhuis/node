@@ -49,7 +49,6 @@ static uv_statbuf_t zero_statbuf;
 
 int uv_fs_poll_init(uv_loop_t* loop, uv_fs_poll_t* handle) {
   uv__handle_init(loop, (uv_handle_t*)handle, UV_FS_POLL);
-  loop->counters.fs_poll_init++;
   return 0;
 }
 
@@ -104,11 +103,15 @@ int uv_fs_poll_stop(uv_fs_poll_t* handle) {
   ctx = handle->poll_ctx;
   assert(ctx != NULL);
   assert(ctx->parent_handle != NULL);
-
   ctx->parent_handle = NULL;
-  uv_timer_stop(&ctx->timer_handle);
-
   handle->poll_ctx = NULL;
+
+  /* Close the timer if it's active. If it's inactive, there's a stat request
+   * in progress and poll_cb will take care of the cleanup.
+   */
+  if (uv__is_active(&ctx->timer_handle))
+    uv_close((uv_handle_t*)&ctx->timer_handle, timer_close_cb);
+
   uv__handle_stop(handle);
 
   return 0;
@@ -124,12 +127,7 @@ static void timer_cb(uv_timer_t* timer, int status) {
   struct poll_ctx* ctx;
 
   ctx = container_of(timer, struct poll_ctx, timer_handle);
-
-  if (ctx->parent_handle == NULL) { /* handle has been stopped or closed */
-    uv_close((uv_handle_t*)&ctx->timer_handle, timer_close_cb);
-    return;
-  }
-
+  assert(ctx->parent_handle != NULL);
   assert(ctx->parent_handle->poll_ctx == ctx);
   ctx->start_time = uv_now(ctx->loop);
 
@@ -171,6 +169,11 @@ static void poll_cb(uv_fs_t* req) {
 
 out:
   uv_fs_req_cleanup(req);
+
+  if (ctx->parent_handle == NULL) { /* handle has been stopped by callback */
+    uv_close((uv_handle_t*)&ctx->timer_handle, timer_close_cb);
+    return;
+  }
 
   /* Reschedule timer, subtract the delay from doing the stat(). */
   interval = ctx->interval;
@@ -237,9 +240,8 @@ static int statbuf_eq(const uv_statbuf_t* a, const uv_statbuf_t* b) {
 #include "win/handle-inl.h"
 
 void uv__fs_poll_endgame(uv_loop_t* loop, uv_fs_poll_t* handle) {
-  assert(handle->flags & UV_HANDLE_CLOSING);
+  assert(handle->flags & UV__HANDLE_CLOSING);
   assert(!(handle->flags & UV_HANDLE_CLOSED));
-  uv__handle_stop(handle);
   uv__handle_close(handle);
 }
 

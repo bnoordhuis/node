@@ -24,7 +24,6 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h> /* strlen */
 
 static int completed_pingers = 0;
 
@@ -52,10 +51,7 @@ void pinger_try_read(pinger_t* pinger);
 
 
 static uv_buf_t alloc_cb(uv_handle_t* handle, size_t size) {
-  uv_buf_t buf;
-  buf.base = (char*)malloc(size);
-  buf.len = size;
-  return buf;
+  return uv_buf_init(malloc(size), size);
 }
 
 
@@ -80,11 +76,9 @@ static void pinger_write_ping(pinger_t* pinger) {
   uv_write_t *req;
   uv_buf_t buf;
 
-  buf.base = (char*)&PING;
-  buf.len = strlen(PING);
+  buf = uv_buf_init(PING, sizeof(PING) - 1);
 
-  req = malloc(sizeof(uv_write_t));
-
+  req = malloc(sizeof(*req));
   if (uv_write(req, (uv_stream_t*)&pinger->stream.tcp, &buf, 1, pinger_after_write)) {
     FATAL("uv_write failed");
   }
@@ -103,10 +97,7 @@ static void pinger_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf) {
     ASSERT(uv_last_error(uv_default_loop()).code == UV_EOF);
 
     puts("got EOF");
-
-    if (buf.base) {
-      free(buf.base);
-    }
+    free(buf.base);
 
     uv_close((uv_handle_t*)(&pinger->stream.tcp), pinger_on_close);
 
@@ -117,17 +108,22 @@ static void pinger_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf) {
   for (i = 0; i < nread; i++) {
     ASSERT(buf.base[i] == PING[pinger->state]);
     pinger->state = (pinger->state + 1) % (sizeof(PING) - 1);
-    if (pinger->state == 0) {
-      printf("PONG %d\n", pinger->pongs);
-      pinger->pongs++;
-      if (pinger->pongs < NUM_PINGS) {
-        pinger_write_ping(pinger);
-      } else {
-        uv_close((uv_handle_t*)(&pinger->stream.tcp), pinger_on_close);
-        return;
-      }
+
+    if (pinger->state != 0)
+      continue;
+
+    printf("PONG %d\n", pinger->pongs);
+    pinger->pongs++;
+
+    if (pinger->pongs < NUM_PINGS) {
+      pinger_write_ping(pinger);
+    } else {
+      uv_close((uv_handle_t*)(&pinger->stream.tcp), pinger_on_close);
+      break;
     }
   }
+
+  free(buf.base);
 }
 
 
@@ -229,6 +225,7 @@ TEST_IMPL(tcp_ping_pong) {
 
   ASSERT(completed_pingers == 1);
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 
@@ -239,6 +236,7 @@ TEST_IMPL(tcp_ping_pong_v6) {
 
   ASSERT(completed_pingers == 1);
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 
@@ -249,5 +247,6 @@ TEST_IMPL(pipe_ping_pong) {
 
   ASSERT(completed_pingers == 1);
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
