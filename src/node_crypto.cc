@@ -4234,7 +4234,7 @@ EIO_PBKDF2(uv_work_t* req) {
 }
 
 void
-EIO_PBKDF2After(uv_work_t* req) {
+EIO_PBKDF2After(uv_work_t* req, int) {
   HandleScope scope;
 
   pbkdf2_req* request = (pbkdf2_req*)req->data;
@@ -4429,7 +4429,7 @@ void RandomBytesCheck(RandomBytesRequest* req, Local<Value> argv[2]) {
 }
 
 
-void RandomBytesAfter(uv_work_t* work_req) {
+void RandomBytesAfter(uv_work_t* work_req, int) {
   RandomBytesRequest* req = container_of(work_req,
                                          RandomBytesRequest,
                                          work_req_);

@@ -24,6 +24,7 @@
 #include "handle_wrap.h"
 
 #include "uv.h"
+#include "ares.h"
 
 #include "v8-debug.h"
 #if defined HAVE_DTRACE || defined HAVE_ETW
@@ -62,14 +63,8 @@ typedef int mode_t;
 #endif
 
 #include "node_buffer.h"
-#ifdef __POSIX__
-# include "node_io_watcher.h"
-#endif
 #include "node_file.h"
 #include "node_http_parser.h"
-#ifdef __POSIX__
-# include "node_signal_watcher.h"
-#endif
 #include "node_constants.h"
 #include "node_javascript.h"
 #include "node_version.h"
@@ -1626,38 +1621,6 @@ static Handle<Value> Uptime(const Arguments& args) {
 }
 
 
-v8::Handle<v8::Value> UVCounters(const v8::Arguments& args) {
-  HandleScope scope;
-
-  uv_counters_t* c = &uv_default_loop()->counters;
-
-  Local<Object> obj = Object::New();
-
-#define setc(name) \
-    obj->Set(String::New(#name), Integer::New(static_cast<int32_t>(c->name)));
-
-  setc(eio_init)
-  setc(req_init)
-  setc(handle_init)
-  setc(stream_init)
-  setc(tcp_init)
-  setc(udp_init)
-  setc(pipe_init)
-  setc(tty_init)
-  setc(prepare_init)
-  setc(check_init)
-  setc(idle_init)
-  setc(async_init)
-  setc(timer_init)
-  setc(process_init)
-  setc(fs_event_init)
-
-#undef setc
-
-  return scope.Close(obj);
-}
-
-
 v8::Handle<v8::Value> MemoryUsage(const v8::Arguments& args) {
   HandleScope scope;
 
@@ -1935,13 +1898,6 @@ static Handle<Value> Binding(const Arguments& args) {
     exports = Object::New();
     DefineConstants(exports);
     binding_cache->Set(module, exports);
-
-#ifdef __POSIX__
-  } else if (!strcmp(*module_v, "io_watcher")) {
-    exports = Object::New();
-    IOWatcher::Initialize(exports);
-    binding_cache->Set(module, exports);
-#endif
 
   } else if (!strcmp(*module_v, "natives")) {
     exports = Object::New();
@@ -2328,7 +2284,6 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
 
   NODE_SET_METHOD(process, "uptime", Uptime);
   NODE_SET_METHOD(process, "memoryUsage", MemoryUsage);
-  NODE_SET_METHOD(process, "uvCounters", UVCounters);
 
   NODE_SET_METHOD(process, "binding", Binding);
 

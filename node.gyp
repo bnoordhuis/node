@@ -58,19 +58,17 @@
 
       'dependencies': [
         'deps/http_parser/http_parser.gyp:http_parser',
-        'deps/uv/uv.gyp:uv',
+        'deps/uv/uv.gyp:libuv',
         'node_js2c#host',
       ],
 
       'include_dirs': [
         'src',
-        'deps/uv/src/ares',
         '<(SHARED_INTERMEDIATE_DIR)' # for node_natives.h
       ],
 
       'sources': [
         'src/fs_event_wrap.cc',
-        'src/cares_wrap.cc',
         'src/handle_wrap.cc',
         'src/node.cc',
         'src/node_buffer.cc',
@@ -203,8 +201,6 @@
         }, { # POSIX
           'defines': [ '__POSIX__' ],
           'sources': [
-            'src/node_signal_watcher.cc',
-            'src/node_io_watcher.cc',
           ],
         }],
         [ 'OS=="mac"', {

@@ -22,7 +22,9 @@
 #include <assert.h>
 #include "node.h"
 #include "req_wrap.h"
+
 #include "uv.h"
+#include "ares.h"
 
 #include <string.h>
 
