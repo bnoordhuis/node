@@ -160,20 +160,20 @@ class Scope: public ZoneObject {
   // global scope.  The variable was introduced (possibly from an inner
   // scope) by a reference to an unresolved variable with no intervening
   // with statements or eval calls.
-  Variable* DeclareGlobal(Handle<String> name);
+  Variable* DeclareDynamicGlobal(Handle<String> name);
 
   // Create a new unresolved variable.
   template<class Visitor>
   VariableProxy* NewUnresolved(AstNodeFactory<Visitor>* factory,
                                Handle<String> name,
-                               int position = RelocInfo::kNoPosition,
-                               Interface* interface = Interface::NewValue()) {
+                               Interface* interface = Interface::NewValue(),
+                               int position = RelocInfo::kNoPosition) {
     // Note that we must not share the unresolved variables with
     // the same name because they may be removed selectively via
     // RemoveUnresolved().
     ASSERT(!already_resolved());
     VariableProxy* proxy =
-        factory->NewVariableProxy(name, false, position, interface);
+        factory->NewVariableProxy(name, false, interface, position);
     unresolved_.Add(proxy, zone_);
     return proxy;
   }
@@ -186,10 +186,16 @@ class Scope: public ZoneObject {
   // such a variable again if it was added; otherwise this is a no-op.
   void RemoveUnresolved(VariableProxy* var);
 
-  // Creates a new temporary variable in this scope.  The name is only used
+  // Creates a new internal variable in this scope.  The name is only used
   // for printing and cannot be used to find the variable.  In particular,
   // the only way to get hold of the temporary is by keeping the Variable*
   // around.
+  Variable* NewInternal(Handle<String> name);
+
+  // Creates a new temporary variable in this scope.  The name is only used
+  // for printing and cannot be used to find the variable.  In particular,
+  // the only way to get hold of the temporary is by keeping the Variable*
+  // around.  The name should not clash with a legitimate variable names.
   Variable* NewTemporary(Handle<String> name);
 
   // Adds the specific declaration node to the list of declarations in
@@ -280,7 +286,8 @@ class Scope: public ZoneObject {
   bool is_block_scope() const { return type_ == BLOCK_SCOPE; }
   bool is_with_scope() const { return type_ == WITH_SCOPE; }
   bool is_declaration_scope() const {
-    return is_eval_scope() || is_function_scope() || is_global_scope();
+    return is_eval_scope() || is_function_scope() ||
+        is_module_scope() || is_global_scope();
   }
   bool is_classic_mode() const {
     return language_mode() == CLASSIC_MODE;
@@ -368,25 +375,32 @@ class Scope: public ZoneObject {
   int StackLocalCount() const;
   int ContextLocalCount() const;
 
+  // For global scopes, the number of module literals (including nested ones).
+  int num_modules() const { return num_modules_; }
+
+  // For module scopes, the host scope's internal variable binding this module.
+  Variable* module_var() const { return module_var_; }
+
   // Make sure this scope and all outer scopes are eagerly compiled.
   void ForceEagerCompilation()  { force_eager_compilation_ = true; }
 
   // Determine if we can use lazy compilation for this scope.
   bool AllowsLazyCompilation() const;
 
-  // True if we can lazily recompile functions with this scope.
-  bool AllowsLazyRecompilation() const;
+  // Determine if we can use lazy compilation for this scope without a context.
+  bool AllowsLazyCompilationWithoutContext() const;
 
-  // True if the outer context of this scope is always the global context.
+  // True if the outer context of this scope is always the native context.
   bool HasTrivialOuterContext() const;
 
-  // True if this scope is inside a with scope and all declaration scopes
-  // between them have empty contexts. Such declaration scopes become
-  // invisible during scope info deserialization.
-  bool TrivialDeclarationScopesBeforeWithScope() const;
+  // True if the outer context allows lazy compilation of this scope.
+  bool HasLazyCompilableOuterContext() const;
 
   // The number of contexts between this and scope; zero if this == scope.
   int ContextChainLength(Scope* scope);
+
+  // Find the innermost global scope.
+  Scope* GlobalScope();
 
   // Find the first function, global, or eval scope.  This is the scope
   // where var declarations will be hoisted to in the implementation.
@@ -442,6 +456,8 @@ class Scope: public ZoneObject {
   // variables may be implicitly 'declared' by being used (possibly in
   // an inner scope) with no intervening with statements or eval calls.
   VariableMap variables_;
+  // Compiler-allocated (user-invisible) internals.
+  ZoneList<Variable*> internals_;
   // Compiler-allocated (user-invisible) temporaries.
   ZoneList<Variable*> temps_;
   // Parameter list in source order.
@@ -494,6 +510,12 @@ class Scope: public ZoneObject {
   // Computed via AllocateVariables; function, block and catch scopes only.
   int num_stack_slots_;
   int num_heap_slots_;
+
+  // The number of modules (including nested ones).
+  int num_modules_;
+
+  // For module scopes, the host scope's internal variable binding this module.
+  Variable* module_var_;
 
   // Serialized scope info support.
   Handle<ScopeInfo> scope_info_;
@@ -579,6 +601,7 @@ class Scope: public ZoneObject {
   void AllocateNonParameterLocal(Variable* var);
   void AllocateNonParameterLocals();
   void AllocateVariablesRecursively();
+  void AllocateModulesRecursively(Scope* host_scope);
 
   // Resolve and fill in the allocation information for all variables
   // in this scopes. Must be called *after* all scopes have been

@@ -1,4 +1,4 @@
-// Copyright 2009 the V8 project authors. All rights reserved.
+// Copyright 2012 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
@@ -73,7 +73,7 @@ function parseState(s) {
 function SnapshotLogProcessor() {
   LogReader.call(this, {
       'code-creation': {
-          parsers: [null, parseInt, parseInt, null, 'var-args'],
+          parsers: [null, parseInt, parseInt, parseInt, null, 'var-args'],
           processor: this.processCodeCreation },
       'code-move': { parsers: [parseInt, parseInt],
           processor: this.processCodeMove },
@@ -107,7 +107,7 @@ inherits(SnapshotLogProcessor, LogReader);
 
 
 SnapshotLogProcessor.prototype.processCodeCreation = function(
-    type, start, size, name, maybe_func) {
+    type, kind, start, size, name, maybe_func) {
   if (maybe_func.length) {
     var funcAddr = parseInt(maybe_func[0]);
     var state = parseState(maybe_func[1]);
@@ -156,7 +156,7 @@ function TickProcessor(
       'shared-library': { parsers: [null, parseInt, parseInt],
           processor: this.processSharedLibrary },
       'code-creation': {
-          parsers: [null, parseInt, parseInt, null, 'var-args'],
+          parsers: [null, parseInt, parseInt, parseInt, null, 'var-args'],
           processor: this.processCodeCreation },
       'code-move': { parsers: [parseInt, parseInt],
           processor: this.processCodeMove },
@@ -167,7 +167,7 @@ function TickProcessor(
       'snapshot-pos': { parsers: [parseInt, parseInt],
           processor: this.processSnapshotPosition },
       'tick': {
-          parsers: [parseInt, parseInt, parseInt,
+          parsers: [parseInt, parseInt, parseInt, parseInt,
                     parseInt, parseInt, 'var-args'],
           processor: this.processTick },
       'heap-sample-begin': { parsers: [null, null, parseInt],
@@ -231,8 +231,9 @@ TickProcessor.VmStates = {
   JS: 0,
   GC: 1,
   COMPILER: 2,
-  OTHER: 3,
-  EXTERNAL: 4
+  PARALLEL_COMPILER: 3,
+  OTHER: 4,
+  EXTERNAL: 5
 };
 
 
@@ -308,7 +309,7 @@ TickProcessor.prototype.processSharedLibrary = function(
 
 
 TickProcessor.prototype.processCodeCreation = function(
-    type, start, size, name, maybe_func) {
+    type, kind, start, size, name, maybe_func) {
   name = this.deserializedEntriesNames_[start] || name;
   if (maybe_func.length) {
     var funcAddr = parseInt(maybe_func[0]);
@@ -349,6 +350,7 @@ TickProcessor.prototype.includeTick = function(vmState) {
 
 TickProcessor.prototype.processTick = function(pc,
                                                sp,
+                                               ns_since_start,
                                                is_external_callback,
                                                tos_or_external_callback,
                                                vmState,
@@ -608,10 +610,11 @@ CppEntriesProvider.prototype.parseNextLine = function() {
 };
 
 
-function UnixCppEntriesProvider(nmExec) {
+function UnixCppEntriesProvider(nmExec, targetRootFS) {
   this.symbols = [];
   this.parsePos = 0;
   this.nmExec = nmExec;
+  this.targetRootFS = targetRootFS;
   this.FUNC_RE = /^([0-9a-fA-F]{8,16}) ([0-9a-fA-F]{8,16} )?[tTwW] (.*)$/;
 };
 inherits(UnixCppEntriesProvider, CppEntriesProvider);
@@ -619,6 +622,7 @@ inherits(UnixCppEntriesProvider, CppEntriesProvider);
 
 UnixCppEntriesProvider.prototype.loadSymbols = function(libName) {
   this.parsePos = 0;
+  libName = this.targetRootFS + libName;
   try {
     this.symbols = [
       os.system(this.nmExec, ['-C', '-n', '-S', libName], -1, -1),
@@ -656,8 +660,8 @@ UnixCppEntriesProvider.prototype.parseNextLine = function() {
 };
 
 
-function MacCppEntriesProvider(nmExec) {
-  UnixCppEntriesProvider.call(this, nmExec);
+function MacCppEntriesProvider(nmExec, targetRootFS) {
+  UnixCppEntriesProvider.call(this, nmExec, targetRootFS);
   // Note an empty group. It is required, as UnixCppEntriesProvider expects 3 groups.
   this.FUNC_RE = /^([0-9a-fA-F]{8,16}) ()[iItT] (.*)$/;
 };
@@ -666,6 +670,7 @@ inherits(MacCppEntriesProvider, UnixCppEntriesProvider);
 
 MacCppEntriesProvider.prototype.loadSymbols = function(libName) {
   this.parsePos = 0;
+  libName = this.targetRootFS + libName;
   try {
     this.symbols = [os.system(this.nmExec, ['-n', '-f', libName], -1, -1), ''];
   } catch (e) {
@@ -675,7 +680,8 @@ MacCppEntriesProvider.prototype.loadSymbols = function(libName) {
 };
 
 
-function WindowsCppEntriesProvider() {
+function WindowsCppEntriesProvider(_ignored_nmExec, targetRootFS) {
+  this.targetRootFS = targetRootFS;
   this.symbols = '';
   this.parsePos = 0;
 };
@@ -698,6 +704,7 @@ WindowsCppEntriesProvider.EXE_IMAGE_BASE = 0x00400000;
 
 
 WindowsCppEntriesProvider.prototype.loadSymbols = function(libName) {
+  libName = this.targetRootFS + libName;
   var fileNameFields = libName.match(WindowsCppEntriesProvider.FILENAME_RE);
   if (!fileNameFields) return;
   var mapFileName = fileNameFields[1] + '.map';
@@ -785,6 +792,8 @@ function ArgumentsProcessor(args) {
         'Specify that we are running on Mac OS X platform'],
     '--nm': ['nm', 'nm',
         'Specify the \'nm\' executable to use (e.g. --nm=/my_dir/nm)'],
+    '--target': ['targetRootFS', '',
+        'Specify the target root directory for cross environment'],
     '--snapshot-log': ['snapshotLogFileName', 'snapshot.log',
         'Specify snapshot log file to use (e.g. --snapshot-log=snapshot.log)']
   };
@@ -804,6 +813,7 @@ ArgumentsProcessor.DEFAULTS = {
   callGraphSize: 5,
   ignoreUnknown: false,
   separateIc: false,
+  targetRootFS: '',
   nm: 'nm'
 };
 

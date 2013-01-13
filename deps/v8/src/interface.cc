@@ -124,8 +124,16 @@ void Interface::Unify(Interface* that, Zone* zone, bool* ok) {
 
   *ok = true;
   if (this == that) return;
-  if (this->IsValue()) return that->MakeValue(ok);
-  if (that->IsValue()) return this->MakeValue(ok);
+  if (this->IsValue()) {
+    that->MakeValue(ok);
+    if (*ok && this->IsConst()) that->MakeConst(ok);
+    return;
+  }
+  if (that->IsValue()) {
+    this->MakeValue(ok);
+    if (*ok && that->IsConst()) this->MakeConst(ok);
+    return;
+  }
 
 #ifdef DEBUG
   if (FLAG_print_interface_details) {
@@ -162,6 +170,8 @@ void Interface::DoUnify(Interface* that, bool* ok, Zone* zone) {
   ASSERT(that->forward_ == NULL);
   ASSERT(!this->IsValue());
   ASSERT(!that->IsValue());
+  ASSERT(this->index_ == -1);
+  ASSERT(that->index_ == -1);
   ASSERT(*ok);
 
 #ifdef DEBUG
@@ -186,15 +196,6 @@ void Interface::DoUnify(Interface* that, bool* ok, Zone* zone) {
     return;
   }
 
-  // Merge instance.
-  if (!that->instance_.is_null()) {
-    if (!this->instance_.is_null() && *this->instance_ != *that->instance_) {
-      *ok = false;
-      return;
-    }
-    this->instance_ = that->instance_;
-  }
-
   // Merge interfaces.
   this->flags_ |= that->flags_;
   that->forward_ = this;
@@ -214,10 +215,12 @@ void Interface::Print(int n) {
 
   if (IsUnknown()) {
     PrintF("unknown\n");
+  } else if (IsConst()) {
+    PrintF("const\n");
   } else if (IsValue()) {
     PrintF("value\n");
   } else if (IsModule()) {
-    PrintF("module %s{", IsFrozen() ? "" : "(unresolved) ");
+    PrintF("module %d %s{", Index(), IsFrozen() ? "" : "(unresolved) ");
     ZoneHashMap* map = Chase()->exports_;
     if (map == NULL || map->occupancy() == 0) {
       PrintF("}\n");

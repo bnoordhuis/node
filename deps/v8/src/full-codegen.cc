@@ -36,6 +36,7 @@
 #include "prettyprinter.h"
 #include "scopes.h"
 #include "scopeinfo.h"
+#include "snapshot.h"
 #include "stub-cache.h"
 
 namespace v8 {
@@ -82,6 +83,10 @@ void BreakableStatementChecker::VisitModulePath(ModulePath* module) {
 }
 
 void BreakableStatementChecker::VisitModuleUrl(ModuleUrl* module) {
+}
+
+
+void BreakableStatementChecker::VisitModuleStatement(ModuleStatement* stmt) {
 }
 
 
@@ -303,7 +308,7 @@ bool FullCodeGenerator::MakeCode(CompilationInfo* info) {
   masm.positions_recorder()->StartGDBJITLineInfoRecording();
 #endif
 
-  FullCodeGenerator cgen(&masm, info, isolate->zone());
+  FullCodeGenerator cgen(&masm, info);
   cgen.Generate();
   if (cgen.HasStackOverflow()) {
     ASSERT(!isolate->has_pending_exception());
@@ -315,7 +320,7 @@ bool FullCodeGenerator::MakeCode(CompilationInfo* info) {
   Handle<Code> code = CodeGenerator::MakeCodeEpilogue(&masm, flags, info);
   code->set_optimizable(info->IsOptimizable() &&
                         !info->function()->flags()->Contains(kDontOptimize) &&
-                        info->function()->scope()->AllowsLazyRecompilation());
+                        info->function()->scope()->AllowsLazyCompilation());
   cgen.PopulateDeoptimizationData(code);
   cgen.PopulateTypeFeedbackInfo(code);
   cgen.PopulateTypeFeedbackCells(code);
@@ -352,7 +357,7 @@ unsigned FullCodeGenerator::EmitStackCheckTable() {
   unsigned length = stack_checks_.length();
   __ dd(length);
   for (unsigned i = 0; i < length; ++i) {
-    __ dd(stack_checks_[i].id);
+    __ dd(stack_checks_[i].id.ToInt());
     __ dd(stack_checks_[i].pc_and_state);
   }
   return offset;
@@ -367,7 +372,7 @@ void FullCodeGenerator::PopulateDeoptimizationData(Handle<Code> code) {
   Handle<DeoptimizationOutputData> data = isolate()->factory()->
       NewDeoptimizationOutputData(length, TENURED);
   for (int i = 0; i < length; i++) {
-    data->SetAstId(i, Smi::FromInt(bailout_entries_[i].id));
+    data->SetAstId(i, bailout_entries_[i].id);
     data->SetPcAndState(i, Smi::FromInt(bailout_entries_[i].pc_and_state));
   }
   code->set_deoptimization_data(*data);
@@ -382,6 +387,20 @@ void FullCodeGenerator::PopulateTypeFeedbackInfo(Handle<Code> code) {
 }
 
 
+void FullCodeGenerator::Initialize() {
+  // The generation of debug code must match between the snapshot code and the
+  // code that is generated later.  This is assumed by the debugger when it is
+  // calculating PC offsets after generating a debug version of code.  Therefore
+  // we disable the production of debug code in the full compiler if we are
+  // either generating a snapshot or we booted from a snapshot.
+  generate_debug_code_ = FLAG_debug_code &&
+                         !Serializer::enabled() &&
+                         !Snapshot::HaveASnapshotToStartFrom();
+  masm_->set_emit_debug_code(generate_debug_code_);
+  masm_->set_predictable_code_size(true);
+}
+
+
 void FullCodeGenerator::PopulateTypeFeedbackCells(Handle<Code> code) {
   if (type_feedback_cells_.is_empty()) return;
   int length = type_feedback_cells_.length();
@@ -389,7 +408,7 @@ void FullCodeGenerator::PopulateTypeFeedbackCells(Handle<Code> code) {
   Handle<TypeFeedbackCells> cache = Handle<TypeFeedbackCells>::cast(
       isolate()->factory()->NewFixedArray(array_size, TENURED));
   for (int i = 0; i < length; i++) {
-    cache->SetAstId(i, Smi::FromInt(type_feedback_cells_[i].ast_id));
+    cache->SetAstId(i, type_feedback_cells_[i].ast_id);
     cache->SetCell(i, *type_feedback_cells_[i].cell);
   }
   TypeFeedbackInfo::cast(code->type_feedback_info())->set_type_feedback_cells(
@@ -420,7 +439,7 @@ void FullCodeGenerator::RecordJSReturnSite(Call* call) {
 }
 
 
-void FullCodeGenerator::PrepareForBailoutForId(unsigned id, State state) {
+void FullCodeGenerator::PrepareForBailoutForId(BailoutId id, State state) {
   // There's no need to prepare this code for bailouts from already optimized
   // code or code that can't be optimized.
   if (!info_->HasDeoptimizationSupport()) return;
@@ -445,15 +464,14 @@ void FullCodeGenerator::PrepareForBailoutForId(unsigned id, State state) {
 
 
 void FullCodeGenerator::RecordTypeFeedbackCell(
-    unsigned id, Handle<JSGlobalPropertyCell> cell) {
+    TypeFeedbackId id, Handle<JSGlobalPropertyCell> cell) {
   TypeFeedbackCellEntry entry = { id, cell };
   type_feedback_cells_.Add(entry, zone());
 }
 
 
-void FullCodeGenerator::RecordStackCheck(unsigned ast_id) {
-  // The pc offset does not need to be encoded and packed together with a
-  // state.
+void FullCodeGenerator::RecordBackEdge(BailoutId ast_id) {
+  // The pc offset does not need to be encoded and packed together with a state.
   ASSERT(masm_->pc_offset() > 0);
   BailoutEntry entry = { ast_id, static_cast<unsigned>(masm_->pc_offset()) };
   stack_checks_.Add(entry, zone());
@@ -567,16 +585,137 @@ void FullCodeGenerator::DoTest(const TestContext* context) {
 }
 
 
+void FullCodeGenerator::AllocateModules(ZoneList<Declaration*>* declarations) {
+  ASSERT(scope_->is_global_scope());
+
+  for (int i = 0; i < declarations->length(); i++) {
+    ModuleDeclaration* declaration = declarations->at(i)->AsModuleDeclaration();
+    if (declaration != NULL) {
+      ModuleLiteral* module = declaration->module()->AsModuleLiteral();
+      if (module != NULL) {
+        Comment cmnt(masm_, "[ Link nested modules");
+        Scope* scope = module->body()->scope();
+        Interface* interface = scope->interface();
+        ASSERT(interface->IsModule() && interface->IsFrozen());
+
+        interface->Allocate(scope->module_var()->index());
+
+        // Set up module context.
+        ASSERT(scope->interface()->Index() >= 0);
+        __ Push(Smi::FromInt(scope->interface()->Index()));
+        __ Push(scope->GetScopeInfo());
+        __ CallRuntime(Runtime::kPushModuleContext, 2);
+        StoreToFrameField(StandardFrameConstants::kContextOffset,
+                          context_register());
+
+        AllocateModules(scope->declarations());
+
+        // Pop module context.
+        LoadContextField(context_register(), Context::PREVIOUS_INDEX);
+        // Update local stack frame context field.
+        StoreToFrameField(StandardFrameConstants::kContextOffset,
+                          context_register());
+      }
+    }
+  }
+}
+
+
+// Modules have their own local scope, represented by their own context.
+// Module instance objects have an accessor for every export that forwards
+// access to the respective slot from the module's context. (Exports that are
+// modules themselves, however, are simple data properties.)
+//
+// All modules have a _hosting_ scope/context, which (currently) is the
+// (innermost) enclosing global scope. To deal with recursion, nested modules
+// are hosted by the same scope as global ones.
+//
+// For every (global or nested) module literal, the hosting context has an
+// internal slot that points directly to the respective module context. This
+// enables quick access to (statically resolved) module members by 2-dimensional
+// access through the hosting context. For example,
+//
+//   module A {
+//     let x;
+//     module B { let y; }
+//   }
+//   module C { let z; }
+//
+// allocates contexts as follows:
+//
+// [header| .A | .B | .C | A | C ]  (global)
+//           |    |    |
+//           |    |    +-- [header| z ]  (module)
+//           |    |
+//           |    +------- [header| y ]  (module)
+//           |
+//           +------------ [header| x | B ]  (module)
+//
+// Here, .A, .B, .C are the internal slots pointing to the hosted module
+// contexts, whereas A, B, C hold the actual instance objects (note that every
+// module context also points to the respective instance object through its
+// extension slot in the header).
+//
+// To deal with arbitrary recursion and aliases between modules,
+// they are created and initialized in several stages. Each stage applies to
+// all modules in the hosting global scope, including nested ones.
+//
+// 1. Allocate: for each module _literal_, allocate the module contexts and
+//    respective instance object and wire them up. This happens in the
+//    PushModuleContext runtime function, as generated by AllocateModules
+//    (invoked by VisitDeclarations in the hosting scope).
+//
+// 2. Bind: for each module _declaration_ (i.e. literals as well as aliases),
+//    assign the respective instance object to respective local variables. This
+//    happens in VisitModuleDeclaration, and uses the instance objects created
+//    in the previous stage.
+//    For each module _literal_, this phase also constructs a module descriptor
+//    for the next stage. This happens in VisitModuleLiteral.
+//
+// 3. Populate: invoke the DeclareModules runtime function to populate each
+//    _instance_ object with accessors for it exports. This is generated by
+//    DeclareModules (invoked by VisitDeclarations in the hosting scope again),
+//    and uses the descriptors generated in the previous stage.
+//
+// 4. Initialize: execute the module bodies (and other code) in sequence. This
+//    happens by the separate statements generated for module bodies. To reenter
+//    the module scopes properly, the parser inserted ModuleStatements.
+
 void FullCodeGenerator::VisitDeclarations(
     ZoneList<Declaration*>* declarations) {
+  Handle<FixedArray> saved_modules = modules_;
+  int saved_module_index = module_index_;
   ZoneList<Handle<Object> >* saved_globals = globals_;
   ZoneList<Handle<Object> > inner_globals(10, zone());
   globals_ = &inner_globals;
 
+  if (scope_->num_modules() != 0) {
+    // This is a scope hosting modules. Allocate a descriptor array to pass
+    // to the runtime for initialization.
+    Comment cmnt(masm_, "[ Allocate modules");
+    ASSERT(scope_->is_global_scope());
+    modules_ =
+        isolate()->factory()->NewFixedArray(scope_->num_modules(), TENURED);
+    module_index_ = 0;
+
+    // Generate code for allocating all modules, including nested ones.
+    // The allocated contexts are stored in internal variables in this scope.
+    AllocateModules(declarations);
+  }
+
   AstVisitor::VisitDeclarations(declarations);
+
+  if (scope_->num_modules() != 0) {
+    // Initialize modules from descriptor array.
+    ASSERT(module_index_ == modules_->length());
+    DeclareModules(modules_);
+    modules_ = saved_modules;
+    module_index_ = saved_module_index;
+  }
+
   if (!globals_->is_empty()) {
     // Invoke the platform-dependent code generator to do the actual
-    // declaration the global functions and variables.
+    // declaration of the global functions and variables.
     Handle<FixedArray> array =
        isolate()->factory()->NewFixedArray(globals_->length(), TENURED);
     for (int i = 0; i < globals_->length(); ++i)
@@ -589,76 +728,69 @@ void FullCodeGenerator::VisitDeclarations(
 
 
 void FullCodeGenerator::VisitModuleLiteral(ModuleLiteral* module) {
-  Handle<JSModule> instance = module->interface()->Instance();
-  ASSERT(!instance.is_null());
-
-  // Allocate a module context statically.
   Block* block = module->body();
   Scope* saved_scope = scope();
   scope_ = block->scope();
-  Handle<ScopeInfo> scope_info = scope_->GetScopeInfo();
+  Interface* interface = scope_->interface();
 
-  // Generate code for module creation and linking.
   Comment cmnt(masm_, "[ ModuleLiteral");
   SetStatementPosition(block);
 
-  if (scope_info->HasContext()) {
-    // Set up module context.
-    __ Push(scope_info);
-    __ Push(instance);
-    __ CallRuntime(Runtime::kPushModuleContext, 2);
-    StoreToFrameField(
-        StandardFrameConstants::kContextOffset, context_register());
-  }
+  ASSERT(!modules_.is_null());
+  ASSERT(module_index_ < modules_->length());
+  int index = module_index_++;
+
+  // Set up module context.
+  ASSERT(interface->Index() >= 0);
+  __ Push(Smi::FromInt(interface->Index()));
+  __ Push(Smi::FromInt(0));
+  __ CallRuntime(Runtime::kPushModuleContext, 2);
+  StoreToFrameField(StandardFrameConstants::kContextOffset, context_register());
 
   {
     Comment cmnt(masm_, "[ Declarations");
     VisitDeclarations(scope_->declarations());
   }
 
-  scope_ = saved_scope;
-  if (scope_info->HasContext()) {
-    // Pop module context.
-    LoadContextField(context_register(), Context::PREVIOUS_INDEX);
-    // Update local stack frame context field.
-    StoreToFrameField(
-        StandardFrameConstants::kContextOffset, context_register());
-  }
+  // Populate the module description.
+  Handle<ModuleInfo> description =
+      ModuleInfo::Create(isolate(), interface, scope_);
+  modules_->set(index, *description);
 
-  // Populate module instance object.
-  const PropertyAttributes attr =
-      static_cast<PropertyAttributes>(READ_ONLY | DONT_DELETE | DONT_ENUM);
-  for (Interface::Iterator it = module->interface()->iterator();
-       !it.done(); it.Advance()) {
-    if (it.interface()->IsModule()) {
-      Handle<Object> value = it.interface()->Instance();
-      ASSERT(!value.is_null());
-      JSReceiver::SetProperty(instance, it.name(), value, attr, kStrictMode);
-    } else {
-      // TODO(rossberg): set proper getters instead of undefined...
-      // instance->DefineAccessor(*it.name(), ACCESSOR_GETTER, *getter, attr);
-      Handle<Object> value(isolate()->heap()->undefined_value());
-      JSReceiver::SetProperty(instance, it.name(), value, attr, kStrictMode);
-    }
-  }
-  USE(instance->PreventExtensions());
+  scope_ = saved_scope;
+  // Pop module context.
+  LoadContextField(context_register(), Context::PREVIOUS_INDEX);
+  // Update local stack frame context field.
+  StoreToFrameField(StandardFrameConstants::kContextOffset, context_register());
 }
 
 
 void FullCodeGenerator::VisitModuleVariable(ModuleVariable* module) {
-  // Noting to do.
+  // Nothing to do.
   // The instance object is resolved statically through the module's interface.
 }
 
 
 void FullCodeGenerator::VisitModulePath(ModulePath* module) {
-  // Noting to do.
+  // Nothing to do.
   // The instance object is resolved statically through the module's interface.
 }
 
 
-void FullCodeGenerator::VisitModuleUrl(ModuleUrl* decl) {
-  // TODO(rossberg)
+void FullCodeGenerator::VisitModuleUrl(ModuleUrl* module) {
+  // TODO(rossberg): dummy allocation for now.
+  Scope* scope = module->body()->scope();
+  Interface* interface = scope_->interface();
+
+  ASSERT(interface->IsModule() && interface->IsFrozen());
+  ASSERT(!modules_.is_null());
+  ASSERT(module_index_ < modules_->length());
+  interface->Allocate(scope->module_var()->index());
+  int index = module_index_++;
+
+  Handle<ModuleInfo> description =
+      ModuleInfo::Create(isolate(), interface, scope_);
+  modules_->set(index, *description);
 }
 
 
@@ -822,7 +954,7 @@ void FullCodeGenerator::VisitLogicalExpression(BinaryOperation* expr) {
   Comment cmnt(masm_, is_logical_and ? "[ Logical AND" :  "[ Logical OR");
   Expression* left = expr->left();
   Expression* right = expr->right();
-  int right_id = expr->RightId();
+  BailoutId right_id = expr->RightId();
   Label done;
 
   if (context()->IsTest()) {
@@ -916,8 +1048,9 @@ void FullCodeGenerator::VisitBlock(Block* stmt) {
   Scope* saved_scope = scope();
   // Push a block context when entering a block with block scoped variables.
   if (stmt->scope() != NULL) {
+    scope_ = stmt->scope();
+    ASSERT(!scope_->is_module_scope());
     { Comment cmnt(masm_, "[ Extend block context");
-      scope_ = stmt->scope();
       Handle<ScopeInfo> scope_info = scope_->GetScopeInfo();
       int heap_slots = scope_info->ContextLength() - Context::MIN_CONTEXT_SLOTS;
       __ Push(scope_info);
@@ -937,6 +1070,7 @@ void FullCodeGenerator::VisitBlock(Block* stmt) {
       VisitDeclarations(scope_->declarations());
     }
   }
+
   PrepareForBailoutForId(stmt->EntryId(), NO_REGISTERS);
   VisitStatements(stmt->statements());
   scope_ = saved_scope;
@@ -950,6 +1084,26 @@ void FullCodeGenerator::VisitBlock(Block* stmt) {
     StoreToFrameField(StandardFrameConstants::kContextOffset,
                       context_register());
   }
+}
+
+
+void FullCodeGenerator::VisitModuleStatement(ModuleStatement* stmt) {
+  Comment cmnt(masm_, "[ Module context");
+
+  __ Push(Smi::FromInt(stmt->proxy()->interface()->Index()));
+  __ Push(Smi::FromInt(0));
+  __ CallRuntime(Runtime::kPushModuleContext, 2);
+  StoreToFrameField(
+      StandardFrameConstants::kContextOffset, context_register());
+
+  Scope* saved_scope = scope_;
+  scope_ = stmt->body()->scope();
+  VisitStatements(stmt->body()->statements());
+  scope_ = saved_scope;
+  LoadContextField(context_register(), Context::PREVIOUS_INDEX);
+  // Update local stack frame context field.
+  StoreToFrameField(StandardFrameConstants::kContextOffset,
+                    context_register());
 }
 
 
@@ -1113,7 +1267,7 @@ void FullCodeGenerator::VisitDoWhileStatement(DoWhileStatement* stmt) {
   // Check stack before looping.
   PrepareForBailoutForId(stmt->BackEdgeId(), NO_REGISTERS);
   __ bind(&stack_check);
-  EmitStackCheck(stmt, &body);
+  EmitBackEdgeBookkeeping(stmt, &body);
   __ jmp(&body);
 
   PrepareForBailoutForId(stmt->ExitId(), NO_REGISTERS);
@@ -1142,7 +1296,7 @@ void FullCodeGenerator::VisitWhileStatement(WhileStatement* stmt) {
   SetStatementPosition(stmt);
 
   // Check stack before looping.
-  EmitStackCheck(stmt, &body);
+  EmitBackEdgeBookkeeping(stmt, &body);
 
   __ bind(&test);
   VisitForControl(stmt->cond(),
@@ -1188,7 +1342,7 @@ void FullCodeGenerator::VisitForStatement(ForStatement* stmt) {
   SetStatementPosition(stmt);
 
   // Check stack before looping.
-  EmitStackCheck(stmt, &body);
+  EmitBackEdgeBookkeeping(stmt, &body);
 
   __ bind(&test);
   if (stmt->cond() != NULL) {

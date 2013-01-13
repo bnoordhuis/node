@@ -66,7 +66,8 @@ class Factory {
 
   Handle<ObjectHashTable> NewObjectHashTable(int at_least_space_for);
 
-  Handle<DescriptorArray> NewDescriptorArray(int number_of_descriptors);
+  Handle<DescriptorArray> NewDescriptorArray(int number_of_descriptors,
+                                             int slack = 0);
   Handle<DeoptimizationInputData> NewDeoptimizationInputData(
       int deopt_entry_count,
       PretenureFlag pretenure);
@@ -81,7 +82,7 @@ class Factory {
   Handle<String> LookupSymbol(Vector<const char> str);
   Handle<String> LookupSymbol(Handle<String> str);
   Handle<String> LookupAsciiSymbol(Vector<const char> str);
-  Handle<String> LookupAsciiSymbol(Handle<SeqAsciiString>,
+  Handle<String> LookupAsciiSymbol(Handle<SeqOneByteString>,
                                    int from,
                                    int length);
   Handle<String> LookupTwoByteSymbol(Vector<const uc16> str);
@@ -129,7 +130,7 @@ class Factory {
   // Allocates and partially initializes an ASCII or TwoByte String. The
   // characters of the string are uninitialized. Currently used in regexp code
   // only, where they are pretenured.
-  Handle<SeqAsciiString> NewRawAsciiString(
+  Handle<SeqOneByteString> NewRawOneByteString(
       int length,
       PretenureFlag pretenure = NOT_TENURED);
   Handle<SeqTwoByteString> NewRawTwoByteString(
@@ -160,11 +161,14 @@ class Factory {
       const ExternalTwoByteString::Resource* resource);
 
   // Create a global (but otherwise uninitialized) context.
-  Handle<Context> NewGlobalContext();
+  Handle<Context> NewNativeContext();
+
+  // Create a global context.
+  Handle<Context> NewGlobalContext(Handle<JSFunction> function,
+                                   Handle<ScopeInfo> scope_info);
 
   // Create a module context.
-  Handle<Context> NewModuleContext(Handle<Context> previous,
-                                   Handle<ScopeInfo> scope_info);
+  Handle<Context> NewModuleContext(Handle<ScopeInfo> scope_info);
 
   // Create a function context.
   Handle<Context> NewFunctionContext(int length, Handle<JSFunction> function);
@@ -223,18 +227,20 @@ class Factory {
 
   Handle<JSObject> NewFunctionPrototype(Handle<JSFunction> function);
 
-  Handle<Map> CopyMapDropDescriptors(Handle<Map> map);
+  Handle<Map> CopyWithPreallocatedFieldDescriptors(Handle<Map> map);
 
   // Copy the map adding more inobject properties if possible without
   // overflowing the instance size.
   Handle<Map> CopyMap(Handle<Map> map, int extra_inobject_props);
-
-  Handle<Map> CopyMapDropTransitions(Handle<Map> map);
+  Handle<Map> CopyMap(Handle<Map> map);
 
   Handle<Map> GetElementsTransitionMap(Handle<JSObject> object,
                                        ElementsKind elements_kind);
 
   Handle<FixedArray> CopyFixedArray(Handle<FixedArray> array);
+
+  Handle<FixedArray> CopySizeFixedArray(Handle<FixedArray> array,
+                                        int new_length);
 
   Handle<FixedDoubleArray> CopyFixedDoubleArray(
       Handle<FixedDoubleArray> array);
@@ -267,7 +273,8 @@ class Factory {
   Handle<JSObject> NewJSObjectFromMap(Handle<Map> map);
 
   // JS modules are pretenured.
-  Handle<JSModule> NewJSModule();
+  Handle<JSModule> NewJSModule(Handle<Context> context,
+                               Handle<ScopeInfo> scope_info);
 
   // JS arrays are pretenured when allocated by the parser.
   Handle<JSArray> NewJSArray(
@@ -298,7 +305,7 @@ class Factory {
   void BecomeJSObject(Handle<JSReceiver> object);
   void BecomeJSFunction(Handle<JSReceiver> object);
 
-  void SetIdentityHash(Handle<JSObject> object, Object* hash);
+  void SetIdentityHash(Handle<JSObject> object, Smi* hash);
 
   Handle<JSFunction> NewFunction(Handle<String> name,
                                  Handle<Object> prototype);
@@ -321,6 +328,8 @@ class Factory {
 
   Handle<ScopeInfo> NewScopeInfo(int length);
 
+  Handle<JSObject> NewExternal(void* value);
+
   Handle<Code> NewCode(const CodeDesc& desc,
                        Code::Flags flags,
                        Handle<Object> self_reference,
@@ -332,7 +341,7 @@ class Factory {
 
   Handle<Object> ToObject(Handle<Object> object);
   Handle<Object> ToObject(Handle<Object> object,
-                          Handle<Context> global_context);
+                          Handle<Context> native_context);
 
   // Interface for creating error objects.
 
@@ -385,12 +394,6 @@ class Factory {
 
   Handle<JSFunction> NewFunctionWithoutPrototype(Handle<String> name,
                                                  Handle<Code> code);
-
-  Handle<DescriptorArray> CopyAppendForeignDescriptor(
-      Handle<DescriptorArray> array,
-      Handle<String> key,
-      Handle<Object> value,
-      PropertyAttributes attributes);
 
   Handle<String> NumberToString(Handle<Object> number);
   Handle<String> Uint32ToString(uint32_t value);
@@ -464,7 +467,7 @@ class Factory {
   Handle<DebugInfo> NewDebugInfo(Handle<SharedFunctionInfo> shared);
 #endif
 
-  // Return a map using the map cache in the global context.
+  // Return a map using the map cache in the native context.
   // The key the an ordered set of property names.
   Handle<Map> ObjectLiteralMapFromCache(Handle<Context> context,
                                         Handle<FixedArray> keys);
@@ -503,14 +506,10 @@ class Factory {
       Handle<String> name,
       LanguageMode language_mode);
 
-  Handle<DescriptorArray> CopyAppendCallbackDescriptors(
-      Handle<DescriptorArray> array,
-      Handle<Object> descriptors);
-
   // Create a new map cache.
   Handle<MapCache> NewMapCache(int at_least_space_for);
 
-  // Update the map cache in the global context with (keys, map)
+  // Update the map cache in the native context with (keys, map)
   Handle<MapCache> AddToMapCache(Handle<Context> context,
                                  Handle<FixedArray> keys,
                                  Handle<Map> map);

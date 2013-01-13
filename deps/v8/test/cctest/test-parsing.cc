@@ -354,7 +354,8 @@ TEST(Regress928) {
   v8::HandleScope handles;
   i::Handle<i::String> source(
       FACTORY->NewStringFromAscii(i::CStrVector(program)));
-  i::ScriptDataImpl* data = i::ParserApi::PartialPreParse(source, NULL, false);
+  i::GenericStringUtf16CharacterStream stream(source, 0, source->length());
+  i::ScriptDataImpl* data = i::ParserApi::PreParse(&stream, NULL, false);
   CHECK(!data->HasError());
 
   data->Initialize();
@@ -1016,12 +1017,11 @@ TEST(ScopePositions) {
         FACTORY->NewStringFromUtf8(i::CStrVector(program.start())));
     CHECK_EQ(source->length(), kProgramSize);
     i::Handle<i::Script> script = FACTORY->NewScript(source);
-    i::Parser parser(script, i::kAllowLazy | i::EXTENDED_MODE, NULL, NULL,
-                     i::Isolate::Current()->zone());
-    i::CompilationInfo info(script);
+    i::CompilationInfoWithZone info(script);
+    i::Parser parser(&info, i::kAllowLazy | i::EXTENDED_MODE, NULL, NULL);
     info.MarkAsGlobal();
     info.SetLanguageMode(source_data[i].language_mode);
-    i::FunctionLiteral* function = parser.ParseProgram(&info);
+    i::FunctionLiteral* function = parser.ParseProgram();
     CHECK(function != NULL);
 
     // Check scope types and positions.
@@ -1038,6 +1038,31 @@ TEST(ScopePositions) {
     // character belonging to that token.
     CHECK_EQ(inner_scope->end_position(), kPrefixLen + kInnerLen);
   }
+}
+
+
+i::Handle<i::String> FormatMessage(i::ScriptDataImpl* data) {
+  i::Handle<i::String> format = v8::Utils::OpenHandle(
+                                    *v8::String::New(data->BuildMessage()));
+  i::Vector<const char*> args = data->BuildArgs();
+  i::Handle<i::JSArray> args_array = FACTORY->NewJSArray(args.length());
+  for (int i = 0; i < args.length(); i++) {
+    i::JSArray::SetElement(args_array,
+                           i,
+                           v8::Utils::OpenHandle(*v8::String::New(args[i])),
+                           NONE,
+                           i::kNonStrictMode);
+  }
+  i::Handle<i::JSObject> builtins(i::Isolate::Current()->js_builtins_object());
+  i::Handle<i::Object> format_fun =
+      i::GetProperty(builtins, "FormatMessage");
+  i::Handle<i::Object> arg_handles[] = { format, args_array };
+  bool has_exception = false;
+  i::Handle<i::Object> result =
+      i::Execution::Call(format_fun, builtins, 2, arg_handles, &has_exception);
+  CHECK(!has_exception);
+  CHECK(result->IsString());
+  return i::Handle<i::String>::cast(result);
 }
 
 
@@ -1061,59 +1086,56 @@ void TestParserSync(i::Handle<i::String> source, int flags) {
   i::Handle<i::Script> script = FACTORY->NewScript(source);
   bool save_harmony_scoping = i::FLAG_harmony_scoping;
   i::FLAG_harmony_scoping = harmony_scoping;
-  i::Parser parser(script, flags, NULL, NULL, i::Isolate::Current()->zone());
-  i::CompilationInfo info(script);
+  i::CompilationInfoWithZone info(script);
+  i::Parser parser(&info, flags, NULL, NULL);
   info.MarkAsGlobal();
-  i::FunctionLiteral* function = parser.ParseProgram(&info);
+  i::FunctionLiteral* function = parser.ParseProgram();
   i::FLAG_harmony_scoping = save_harmony_scoping;
 
-  i::String* type_string = NULL;
+  // Check that preparsing fails iff parsing fails.
   if (function == NULL) {
     // Extract exception from the parser.
-    i::Handle<i::String> type_symbol = FACTORY->LookupAsciiSymbol("type");
     CHECK(i::Isolate::Current()->has_pending_exception());
     i::MaybeObject* maybe_object = i::Isolate::Current()->pending_exception();
     i::JSObject* exception = NULL;
     CHECK(maybe_object->To(&exception));
+    i::Handle<i::JSObject> exception_handle(exception);
+    i::Handle<i::String> message_string =
+        i::Handle<i::String>::cast(i::GetProperty(exception_handle, "message"));
 
-    // Get the type string.
-    maybe_object = exception->GetProperty(*type_symbol);
-    CHECK(maybe_object->To(&type_string));
-  }
-
-  // Check that preparsing fails iff parsing fails.
-  if (data.has_error() && function != NULL) {
-    i::OS::Print(
-        "Preparser failed on:\n"
-        "\t%s\n"
-        "with error:\n"
-        "\t%s\n"
-        "However, the parser succeeded",
-        *source->ToCString(), data.BuildMessage());
-    CHECK(false);
-  } else if (!data.has_error() && function == NULL) {
-    i::OS::Print(
-        "Parser failed on:\n"
-        "\t%s\n"
-        "with error:\n"
-        "\t%s\n"
-        "However, the preparser succeeded",
-        *source->ToCString(), *type_string->ToCString());
-    CHECK(false);
-  }
-
-  // Check that preparser and parser produce the same error.
-  if (function == NULL) {
-    if (!type_string->IsEqualTo(i::CStrVector(data.BuildMessage()))) {
+    if (!data.has_error()) {
+      i::OS::Print(
+          "Parser failed on:\n"
+          "\t%s\n"
+          "with error:\n"
+          "\t%s\n"
+          "However, the preparser succeeded",
+          *source->ToCString(), *message_string->ToCString());
+      CHECK(false);
+    }
+    // Check that preparser and parser produce the same error.
+    i::Handle<i::String> preparser_message = FormatMessage(&data);
+    if (!message_string->Equals(*preparser_message)) {
       i::OS::Print(
           "Expected parser and preparser to produce the same error on:\n"
           "\t%s\n"
           "However, found the following error messages\n"
           "\tparser:    %s\n"
           "\tpreparser: %s\n",
-          *source->ToCString(), *type_string->ToCString(), data.BuildMessage());
+          *source->ToCString(),
+          *message_string->ToCString(),
+          *preparser_message->ToCString());
       CHECK(false);
     }
+  } else if (data.has_error()) {
+    i::OS::Print(
+        "Preparser failed on:\n"
+        "\t%s\n"
+        "with error:\n"
+        "\t%s\n"
+        "However, the parser succeeded",
+        *source->ToCString(), *FormatMessage(&data)->ToCString());
+    CHECK(false);
   }
 }
 
@@ -1148,6 +1170,7 @@ TEST(ParserSync) {
     { "with ({})", "" },
     { "switch (12) { case 12: ", "}" },
     { "switch (12) { default: ", "}" },
+    { "switch (12) { ", "case 12: }" },
     { "label2: ", "" },
     { NULL, NULL }
   };
@@ -1236,4 +1259,27 @@ TEST(ParserSync) {
       }
     }
   }
+}
+
+
+TEST(PreparserStrictOctal) {
+  // Test that syntax error caused by octal literal is reported correctly as
+  // such (issue 2220).
+  v8::internal::FLAG_min_preparse_length = 1;  // Force preparsing.
+  v8::V8::Initialize();
+  v8::HandleScope scope;
+  v8::Context::Scope context_scope(v8::Context::New());
+  v8::TryCatch try_catch;
+  const char* script =
+      "\"use strict\";       \n"
+      "a = function() {      \n"
+      "  b = function() {    \n"
+      "    01;               \n"
+      "  };                  \n"
+      "};                    \n";
+  v8::Script::Compile(v8::String::New(script));
+  CHECK(try_catch.HasCaught());
+  v8::String::Utf8Value exception(try_catch.Exception());
+  CHECK_EQ("SyntaxError: Octal literals are not allowed in strict mode.",
+           *exception);
 }

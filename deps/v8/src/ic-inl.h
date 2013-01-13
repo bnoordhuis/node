@@ -40,10 +40,11 @@ namespace internal {
 
 Address IC::address() const {
   // Get the address of the call.
-  Address result = pc() - Assembler::kCallTargetAddressOffset;
+  Address result = Assembler::target_address_from_return_address(pc());
 
 #ifdef ENABLE_DEBUGGER_SUPPORT
-  Debug* debug = Isolate::Current()->debug();
+  ASSERT(Isolate::Current() == isolate());
+  Debug* debug = isolate()->debug();
   // First check if any break points are active if not just return the address
   // of the call.
   if (!debug->has_break_points()) return result;
@@ -79,6 +80,7 @@ Code* IC::GetTargetAtAddress(Address address) {
 
 void IC::SetTargetAtAddress(Address address, Code* target) {
   ASSERT(target->is_inline_cache_stub() || target->is_compare_ic_stub());
+  Heap* heap = target->GetHeap();
   Code* old_target = GetTargetAtAddress(address);
 #ifdef DEBUG
   // STORE_IC and KEYED_STORE_IC use Code::extra_ic_state() to mark
@@ -90,8 +92,11 @@ void IC::SetTargetAtAddress(Address address, Code* target) {
   }
 #endif
   Assembler::set_target_address_at(address, target->instruction_start());
-  target->GetHeap()->incremental_marking()->RecordCodeTargetPatch(address,
-                                                                  target);
+  if (heap->gc_state() == Heap::MARK_COMPACT) {
+    heap->mark_compact_collector()->RecordCodeTargetPatch(address, target);
+  } else {
+    heap->incremental_marking()->RecordCodeTargetPatch(address, target);
+  }
   PostPatching(address, target, old_target);
 }
 

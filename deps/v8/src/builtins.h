@@ -38,6 +38,25 @@ enum BuiltinExtraArguments {
 };
 
 
+#define CODE_AGE_LIST_WITH_ARG(V, A)     \
+  V(Quadragenarian, A)                   \
+  V(Quinquagenarian, A)                  \
+  V(Sexagenarian, A)                     \
+  V(Septuagenarian, A)                   \
+  V(Octogenarian, A)
+
+#define CODE_AGE_LIST_IGNORE_ARG(X, V) V(X)
+
+#define CODE_AGE_LIST(V) \
+  CODE_AGE_LIST_WITH_ARG(CODE_AGE_LIST_IGNORE_ARG, V)
+
+#define DECLARE_CODE_AGE_BUILTIN(C, V)             \
+  V(Make##C##CodeYoungAgainOddMarking, BUILTIN,    \
+    UNINITIALIZED, Code::kNoExtraICState)          \
+  V(Make##C##CodeYoungAgainEvenMarking, BUILTIN,   \
+    UNINITIALIZED, Code::kNoExtraICState)
+
+
 // Define list of builtins implemented in C++.
 #define BUILTIN_LIST_C(V)                                           \
   V(Illegal, NO_EXTRA_ARGUMENTS)                                    \
@@ -66,6 +85,8 @@ enum BuiltinExtraArguments {
 #define BUILTIN_LIST_A(V)                                               \
   V(ArgumentsAdaptorTrampoline,     BUILTIN, UNINITIALIZED,             \
                                     Code::kNoExtraICState)              \
+  V(InRecompileQueue,               BUILTIN, UNINITIALIZED,             \
+                                    Code::kNoExtraICState)              \
   V(JSConstructStubCountdown,       BUILTIN, UNINITIALIZED,             \
                                     Code::kNoExtraICState)              \
   V(JSConstructStubGeneric,         BUILTIN, UNINITIALIZED,             \
@@ -79,6 +100,8 @@ enum BuiltinExtraArguments {
   V(LazyCompile,                    BUILTIN, UNINITIALIZED,             \
                                     Code::kNoExtraICState)              \
   V(LazyRecompile,                  BUILTIN, UNINITIALIZED,             \
+                                    Code::kNoExtraICState)              \
+  V(ParallelRecompile,              BUILTIN, UNINITIALIZED,             \
                                     Code::kNoExtraICState)              \
   V(NotifyDeoptimized,              BUILTIN, UNINITIALIZED,             \
                                     Code::kNoExtraICState)              \
@@ -119,6 +142,8 @@ enum BuiltinExtraArguments {
                                     Code::kNoExtraICState)              \
   V(LoadIC_Megamorphic,             LOAD_IC, MEGAMORPHIC,               \
                                     Code::kNoExtraICState)              \
+  V(LoadIC_Getter_ForDeopt,         LOAD_IC, MONOMORPHIC,               \
+                                    Code::kNoExtraICState)              \
                                                                         \
   V(KeyedLoadIC_Initialize,         KEYED_LOAD_IC, UNINITIALIZED,       \
                                     Code::kNoExtraICState)              \
@@ -152,6 +177,8 @@ enum BuiltinExtraArguments {
   V(StoreIC_Megamorphic_Strict,     STORE_IC, MEGAMORPHIC,              \
                                     kStrictMode)                        \
   V(StoreIC_GlobalProxy_Strict,     STORE_IC, MEGAMORPHIC,              \
+                                    kStrictMode)                        \
+  V(StoreIC_Setter_ForDeopt,        STORE_IC, MONOMORPHIC,              \
                                     kStrictMode)                        \
                                                                         \
   V(KeyedStoreIC_Initialize,        KEYED_STORE_IC, UNINITIALIZED,      \
@@ -187,8 +214,8 @@ enum BuiltinExtraArguments {
                                     Code::kNoExtraICState)              \
                                                                         \
   V(OnStackReplacement,             BUILTIN, UNINITIALIZED,             \
-                                    Code::kNoExtraICState)
-
+                                    Code::kNoExtraICState)              \
+  CODE_AGE_LIST_WITH_ARG(DECLARE_CODE_AGE_BUILTIN, V)
 
 #ifdef ENABLE_DEBUGGER_SUPPORT
 // Define list of builtins used by the debugger implemented in assembly.
@@ -347,6 +374,8 @@ class Builtins {
   static void Generate_Adaptor(MacroAssembler* masm,
                                CFunctionId id,
                                BuiltinExtraArguments extra_args);
+  static void Generate_InRecompileQueue(MacroAssembler* masm);
+  static void Generate_ParallelRecompile(MacroAssembler* masm);
   static void Generate_JSConstructStubCountdown(MacroAssembler* masm);
   static void Generate_JSConstructStubGeneric(MacroAssembler* masm);
   static void Generate_JSConstructStubApi(MacroAssembler* masm);
@@ -368,6 +397,14 @@ class Builtins {
 
   static void Generate_StringConstructCode(MacroAssembler* masm);
   static void Generate_OnStackReplacement(MacroAssembler* masm);
+
+#define DECLARE_CODE_AGE_BUILTIN_GENERATOR(C)                \
+  static void Generate_Make##C##CodeYoungAgainEvenMarking(   \
+      MacroAssembler* masm);                                 \
+  static void Generate_Make##C##CodeYoungAgainOddMarking(    \
+      MacroAssembler* masm);
+  CODE_AGE_LIST(DECLARE_CODE_AGE_BUILTIN_GENERATOR)
+#undef DECLARE_CODE_AGE_BUILTIN_GENERATOR
 
   static void InitBuiltinFunctionTable();
 

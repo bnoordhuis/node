@@ -79,6 +79,7 @@
         'test-lockers.cc',
         'test-log.cc',
         'test-mark-compact.cc',
+        'test-object-observe.cc',
         'test-parsing.cc',
         'test-platform-tls.cc',
         'test-profile-generator.cc',
@@ -118,7 +119,7 @@
             'test-disasm-arm.cc'
           ],
         }],
-        ['v8_target_arch=="mips"', {
+        ['v8_target_arch=="mipsel"', {
           'sources': [
             'test-assembler-mips.cc',
             'test-disasm-mips.cc',

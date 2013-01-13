@@ -50,11 +50,12 @@
 
 // Setup for Linux shared library export. See v8.h in this directory for
 // information on how to build/use V8 as shared library.
-#if defined(__GNUC__) && (__GNUC__ >= 4) && defined(V8_SHARED)
+#if defined(__GNUC__) && ((__GNUC__ >= 4) || \
+    (__GNUC__ == 3 && __GNUC_MINOR__ >= 3)) && defined(V8_SHARED)
 #define V8EXPORT __attribute__ ((visibility("default")))
-#else  // defined(__GNUC__) && (__GNUC__ >= 4)
+#else
 #define V8EXPORT
-#endif  // defined(__GNUC__) && (__GNUC__ >= 4)
+#endif
 
 #endif  // _WIN32
 
@@ -280,31 +281,11 @@ class V8EXPORT HeapGraphNode {
   /** Returns node's own size, in bytes. */
   int GetSelfSize() const;
 
-  /**
-   * Returns node's retained size, in bytes. That is, self + sizes of
-   * the objects that are reachable only from this object. In other
-   * words, the size of memory that will be reclaimed having this node
-   * collected.
-   */
-  int GetRetainedSize() const;
-
   /** Returns child nodes count of the node. */
   int GetChildrenCount() const;
 
   /** Retrieves a child by index. */
   const HeapGraphEdge* GetChild(int index) const;
-
-  /** Returns retainer nodes count of the node. */
-  int GetRetainersCount() const;
-
-  /** Returns a retainer by index. */
-  const HeapGraphEdge* GetRetainer(int index) const;
-
-  /**
-   * Returns a dominator node. This is the node that participates in every
-   * path from the snapshot root to the current node.
-   */
-  const HeapGraphNode* GetDominatorNode() const;
 
   /**
    * Finds and returns a value from the heap corresponding to this node,
@@ -426,13 +407,28 @@ class V8EXPORT HeapProfiler {
   static const SnapshotObjectId kUnknownObjectId = 0;
 
   /**
+   * Callback interface for retrieving user friendly names of global objects.
+   */
+  class ObjectNameResolver {
+  public:
+    /**
+     * Returns name to be used in the heap snapshot for given node. Returned
+     * string must stay alive until snapshot collection is completed.
+     */
+    virtual const char* GetName(Handle<Object> object) = 0;
+  protected:
+    virtual ~ObjectNameResolver() {}
+  };
+
+  /**
    * Takes a heap snapshot and returns it. Title may be an empty string.
    * See HeapSnapshot::Type for types description.
    */
   static const HeapSnapshot* TakeSnapshot(
       Handle<String> title,
       HeapSnapshot::Type type = HeapSnapshot::kFull,
-      ActivityControl* control = NULL);
+      ActivityControl* control = NULL,
+      ObjectNameResolver* global_object_name_resolver = NULL);
 
   /**
    * Starts tracking of heap objects population statistics. After calling
