@@ -29,9 +29,6 @@ NODE_EXT_LIST_ITEM(node_crypto)
 NODE_EXT_LIST_ITEM(node_evals)
 NODE_EXT_LIST_ITEM(node_fs)
 NODE_EXT_LIST_ITEM(node_http_parser)
-#ifdef __POSIX__
-NODE_EXT_LIST_ITEM(node_signal_watcher)
-#endif
 NODE_EXT_LIST_ITEM(node_os)
 NODE_EXT_LIST_ITEM(node_zlib)
 

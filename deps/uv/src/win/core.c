@@ -69,6 +69,9 @@ static void uv_init(void) {
   /* Initialize FS */
   uv_fs_init();
 
+  /* Initialize signal stuff */
+  uv_signals_init();
+
   /* Initialize console */
   uv_console_init();
 
@@ -109,15 +112,10 @@ static void uv_loop_init(uv_loop_t* loop) {
 
   memset(&loop->poll_peer_sockets, 0, sizeof loop->poll_peer_sockets);
 
-  loop->channel = NULL;
-  RB_INIT(&loop->ares_handles);
-
   loop->active_tcp_streams = 0;
   loop->active_udp_streams = 0;
 
   loop->last_err = uv_ok_;
-
-  memset(&loop->counters, 0, sizeof loop->counters);
 }
 
 
@@ -170,6 +168,16 @@ void uv_loop_delete(uv_loop_t* loop) {
 
     free(loop);
   }
+}
+
+
+int uv_backend_fd(const uv_loop_t* loop) {
+  return -1;
+}
+
+
+int uv_backend_timeout(const uv_loop_t* loop) {
+  return 0;
 }
 
 
@@ -244,57 +252,47 @@ static void uv_poll_ex(uv_loop_t* loop, int block) {
      !ngx_queue_empty(&(loop)->active_reqs) ||                                \
      (loop)->endgame_handles != NULL)
 
-#define UV_LOOP_ONCE(loop, poll)                                              \
-  do {                                                                        \
-    uv_update_time((loop));                                                   \
-    uv_process_timers((loop));                                                \
-                                                                              \
-    /* Call idle callbacks if nothing to do. */                               \
-    if ((loop)->pending_reqs_tail == NULL &&                                  \
-        (loop)->endgame_handles == NULL) {                                    \
-      uv_idle_invoke((loop));                                                 \
-    }                                                                         \
-                                                                              \
-    uv_process_reqs((loop));                                                  \
-    uv_process_endgames((loop));                                              \
-                                                                              \
-    if (!UV_LOOP_ALIVE((loop))) {                                             \
-      break;                                                                  \
-    }                                                                         \
-                                                                              \
-    uv_prepare_invoke((loop));                                                \
-                                                                              \
-    poll((loop), (loop)->idle_handles == NULL &&                              \
-                 (loop)->pending_reqs_tail == NULL &&                         \
-                 (loop)->endgame_handles == NULL &&                           \
-                 UV_LOOP_ALIVE((loop)));                                      \
-                                                                              \
-    uv_check_invoke((loop));                                                  \
-  } while (0);
+int uv_run2(uv_loop_t *loop, uv_run_mode mode) {
+  int r;
+  void (*poll)(uv_loop_t* loop, int block);
 
-#define UV_LOOP(loop, poll)                                                   \
-  while (UV_LOOP_ALIVE((loop))) {                                             \
-    UV_LOOP_ONCE(loop, poll)                                                  \
+  if (pGetQueuedCompletionStatusEx)
+    poll = &uv_poll_ex;
+  else
+    poll = &uv_poll;
+
+  r = UV_LOOP_ALIVE(loop);
+  while (r) {
+    uv_update_time(loop);
+    uv_process_timers(loop);
+
+    /* Call idle callbacks if nothing to do. */
+    if (loop->pending_reqs_tail == NULL &&
+        loop->endgame_handles == NULL) {
+      uv_idle_invoke(loop);
+    }
+
+    uv_process_reqs(loop);
+    uv_process_endgames(loop);
+
+    uv_prepare_invoke(loop);
+
+    (*poll)(loop, loop->idle_handles == NULL &&
+                  loop->pending_reqs_tail == NULL &&
+                  loop->endgame_handles == NULL &&
+                  UV_LOOP_ALIVE(loop) &&
+                  !(mode & UV_RUN_NOWAIT));
+
+    uv_check_invoke(loop);
+    r = UV_LOOP_ALIVE(loop);
+
+    if (mode & (UV_RUN_ONCE | UV_RUN_NOWAIT))
+      break;
   }
-
-
-int uv_run_once(uv_loop_t* loop) {
-  if (pGetQueuedCompletionStatusEx) {
-    UV_LOOP_ONCE(loop, uv_poll_ex);
-  } else {
-    UV_LOOP_ONCE(loop, uv_poll);
-  }
-  return UV_LOOP_ALIVE(loop);
+  return r;
 }
 
 
 int uv_run(uv_loop_t* loop) {
-  if (pGetQueuedCompletionStatusEx) {
-    UV_LOOP(loop, uv_poll_ex);
-  } else {
-    UV_LOOP(loop, uv_poll);
-  }
-
-  assert(!UV_LOOP_ALIVE((loop)));
-  return 0;
+  return uv_run2(loop, UV_RUN_DEFAULT);
 }

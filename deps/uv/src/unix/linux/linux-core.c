@@ -57,7 +57,7 @@
 # define CLOCK_BOOTTIME 7
 #endif
 
-static char buf[MAXPATHLEN + 1];
+static void* args_mem;
 
 static struct {
   char *str;
@@ -70,11 +70,194 @@ static void read_times(unsigned int numcpus, uv_cpu_info_t* ci);
 static unsigned long read_cpufreq(unsigned int cpunum);
 
 
-/*
- * There's probably some way to get time from Linux than gettimeofday(). What
- * it is, I don't know.
- */
-uint64_t uv_hrtime() {
+__attribute__((destructor))
+static void free_args_mem(void) {
+  free(args_mem); /* keep valgrind happy */
+}
+
+
+int uv__platform_loop_init(uv_loop_t* loop, int default_loop) {
+  int fd;
+
+  fd = uv__epoll_create1(UV__EPOLL_CLOEXEC);
+
+  /* epoll_create1() can fail either because it's not implemented (old kernel)
+   * or because it doesn't understand the EPOLL_CLOEXEC flag.
+   */
+  if (fd == -1 && (errno == ENOSYS || errno == EINVAL)) {
+    fd = uv__epoll_create(256);
+
+    if (fd != -1)
+      uv__cloexec(fd, 1);
+  }
+
+  loop->backend_fd = fd;
+  loop->inotify_fd = -1;
+  loop->inotify_watchers = NULL;
+
+  if (fd == -1)
+    return -1;
+
+  return 0;
+}
+
+
+void uv__platform_loop_delete(uv_loop_t* loop) {
+  if (loop->inotify_fd == -1) return;
+  uv__io_stop(loop, &loop->inotify_read_watcher, UV__POLLIN);
+  close(loop->inotify_fd);
+  loop->inotify_fd = -1;
+}
+
+
+void uv__io_poll(uv_loop_t* loop, int timeout) {
+  struct uv__epoll_event events[1024];
+  struct uv__epoll_event* pe;
+  struct uv__epoll_event e;
+  ngx_queue_t* q;
+  uv__io_t* w;
+  uint64_t base;
+  uint64_t diff;
+  int nevents;
+  int count;
+  int nfds;
+  int fd;
+  int op;
+  int i;
+
+  if (loop->nfds == 0) {
+    assert(ngx_queue_empty(&loop->watcher_queue));
+    return;
+  }
+
+  while (!ngx_queue_empty(&loop->watcher_queue)) {
+    q = ngx_queue_head(&loop->watcher_queue);
+    ngx_queue_remove(q);
+    ngx_queue_init(q);
+
+    w = ngx_queue_data(q, uv__io_t, watcher_queue);
+    assert(w->pevents != 0);
+    assert(w->fd >= 0);
+    assert(w->fd < (int) loop->nwatchers);
+
+    /* Filter out no-op changes. This is for compatibility with the event ports
+     * backend, see the comment in uv__io_start().
+     */
+    if (w->events == w->pevents)
+      continue;
+
+    e.events = w->pevents;
+    e.data = w->fd;
+
+    if (w->events == 0)
+      op = UV__EPOLL_CTL_ADD;
+    else
+      op = UV__EPOLL_CTL_MOD;
+
+    /* XXX Future optimization: do EPOLL_CTL_MOD lazily if we stop watching
+     * events, skip the syscall and squelch the events after epoll_wait().
+     */
+    if (uv__epoll_ctl(loop->backend_fd, op, w->fd, &e)) {
+      if (errno != EEXIST)
+        abort();
+
+      assert(op == UV__EPOLL_CTL_ADD);
+
+      /* We've reactivated a file descriptor that's been watched before. */
+      if (uv__epoll_ctl(loop->backend_fd, UV__EPOLL_CTL_MOD, w->fd, &e))
+        abort();
+    }
+
+    w->events = w->pevents;
+  }
+
+  assert(timeout >= -1);
+  base = loop->time;
+  count = 48; /* Benchmarks suggest this gives the best throughput. */
+
+  for (;;) {
+    nfds = uv__epoll_wait(loop->backend_fd,
+                          events,
+                          ARRAY_SIZE(events),
+                          timeout);
+
+    /* Update loop->time unconditionally. It's tempting to skip the update when
+     * timeout == 0 (i.e. non-blocking poll) but there is no guarantee that the
+     * operating system didn't reschedule our process while in the syscall.
+     */
+    SAVE_ERRNO(uv__update_time(loop));
+
+    if (nfds == 0) {
+      assert(timeout != -1);
+      return;
+    }
+
+    if (nfds == -1) {
+      if (errno != EINTR)
+        abort();
+
+      if (timeout == -1)
+        continue;
+
+      if (timeout == 0)
+        return;
+
+      /* Interrupted by a signal. Update timeout and poll again. */
+      goto update_timeout;
+    }
+
+    nevents = 0;
+
+    for (i = 0; i < nfds; i++) {
+      pe = events + i;
+      fd = pe->data;
+
+      assert(fd >= 0);
+      assert((unsigned) fd < loop->nwatchers);
+
+      w = loop->watchers[fd];
+
+      if (w == NULL) {
+        /* File descriptor that we've stopped watching, disarm it. */
+        if (uv__epoll_ctl(loop->backend_fd, UV__EPOLL_CTL_DEL, fd, pe))
+          if (errno != EBADF && errno != ENOENT)
+            abort();
+
+        continue;
+      }
+
+      w->cb(loop, w, pe->events);
+      nevents++;
+    }
+
+    if (nevents != 0) {
+      if (nfds == ARRAY_SIZE(events) && --count != 0) {
+        /* Poll for more events but don't block this time. */
+        timeout = 0;
+        continue;
+      }
+      return;
+    }
+
+    if (timeout == 0)
+      return;
+
+    if (timeout == -1)
+      continue;
+
+update_timeout:
+    assert(timeout > 0);
+
+    diff = loop->time - base;
+    if (diff >= (uint64_t) timeout)
+      return;
+
+    timeout -= diff;
+  }
+}
+
+
+uint64_t uv__hrtime(void) {
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
   return (((uint64_t) ts.tv_sec) * NANOSEC + ts.tv_nsec);
@@ -137,11 +320,12 @@ char** uv_setup_args(int argc, char** argv) {
   size += (argc + 1) * sizeof(char **);
   size += (envc + 1) * sizeof(char **);
 
-  if ((s = (char *) malloc(size)) == NULL) {
+  if (NULL == (s = malloc(size))) {
     process_title.str = NULL;
     process_title.len = 0;
     return argv;
   }
+  args_mem = s;
 
   new_argv = (char **) s;
   new_env = new_argv + argc + 1;
@@ -197,6 +381,7 @@ uv_err_t uv_resident_set_memory(size_t* rss) {
   size_t page_size = getpagesize();
   char *cbuf;
   int foundExeEnd;
+  char buf[PATH_MAX + 1];
 
   f = fopen("/proc/self/stat", "r");
   if (!f) return uv__new_sys_error(errno);
@@ -365,11 +550,13 @@ static void read_models(unsigned int numcpus, uv_cpu_info_t* ci) {
   static const char model_marker[] = "";
   static const char speed_marker[] = "";
 #endif
+  static const char bogus_model[] = "unknown";
   unsigned int model_idx;
   unsigned int speed_idx;
   char buf[1024];
   char* model;
   FILE* fp;
+  char* inferred_model;
 
   fp = fopen("/proc/cpuinfo", "r");
   if (fp == NULL)
@@ -398,6 +585,26 @@ static void read_models(unsigned int numcpus, uv_cpu_info_t* ci) {
     }
   }
   fclose(fp);
+
+  /* Now we want to make sure that all the models contain *something*:
+   * it's not safe to leave them as null.
+   */
+  if (model_idx == 0) {
+    /* No models at all: fake up the first one. */
+    ci[0].model = strndup(bogus_model, sizeof(bogus_model) - 1);
+    model_idx = 1;
+  }
+
+  /* Not enough models, but we do have at least one.  So we'll just
+   * copy the rest down: it might be better to indicate somehow that
+   * the remaining ones have been guessed.
+   */
+  inferred_model = ci[model_idx - 1].model;
+
+  while (model_idx < numcpus) {
+    ci[model_idx].model = strndup(inferred_model, strlen(inferred_model));
+    model_idx++;
+  }
 }
 
 
@@ -483,8 +690,9 @@ static unsigned long read_cpufreq(unsigned int cpunum) {
   if (fp == NULL)
     return 0;
 
-  val = 0;
-  fscanf(fp, "%lu", &val);
+  if (fscanf(fp, "%lu", &val) != 1)
+    val = 0;
+
   fclose(fp);
 
   return val;

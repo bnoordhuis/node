@@ -58,13 +58,14 @@
 
       'dependencies': [
         'deps/http_parser/http_parser.gyp:http_parser',
-        'deps/uv/uv.gyp:uv',
+        'deps/cares/cares.gyp:cares',
+        'deps/uv/uv.gyp:libuv',
         'node_js2c#host',
       ],
 
       'include_dirs': [
         'src',
-        'deps/uv/src/ares',
+        'deps/cares/include',
         '<(SHARED_INTERMEDIATE_DIR)' # for node_natives.h
       ],
 
@@ -203,10 +204,6 @@
           'libraries': [ '-lpsapi.lib' ]
         }, { # POSIX
           'defines': [ '__POSIX__' ],
-          'sources': [
-            'src/node_signal_watcher.cc',
-            'src/node_io_watcher.cc',
-          ],
         }],
         [ 'OS=="mac"', {
           'libraries': [ '-framework Carbon' ],

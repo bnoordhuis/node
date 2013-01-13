@@ -186,7 +186,7 @@ class ZCtx : public ObjectWrap {
   }
 
   // v8 land!
-  static void After(uv_work_t* work_req) {
+  static void After(uv_work_t* work_req, int status) {
     HandleScope scope;
     ZCtx *ctx = container_of(work_req, ZCtx, work_req_);
 

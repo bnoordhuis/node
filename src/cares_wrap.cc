@@ -22,6 +22,7 @@
 #include <assert.h>
 #include "node.h"
 #include "req_wrap.h"
+#include "ares.h"
 #include "uv.h"
 
 #include <string.h>
@@ -752,10 +753,6 @@ static void Initialize(Handle<Object> target) {
 
   r = ares_library_init(ARES_LIB_INIT_ALL);
   assert(r == ARES_SUCCESS);
-
-  struct ares_options options;
-  uv_ares_init_options(uv_default_loop(), &ares_channel, &options, 0);
-  assert(r == 0);
 
   NODE_SET_METHOD(target, "queryA", Query<QueryAWrap>);
   NODE_SET_METHOD(target, "queryAaaa", Query<QueryAaaaWrap>);
