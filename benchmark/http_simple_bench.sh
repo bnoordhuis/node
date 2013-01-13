@@ -49,7 +49,7 @@ ab_hello_world() {
   sleep 3
 
   # hammer that as hard as it can for 10 seconds.
-  ab -g $data_fn -c 100 -t 10 http://$SERVER:$PORT/$uri > $summary_fn
+  ab -g $data_fn -k -c 1000 -t 10 http://$SERVER:$PORT/$uri > $summary_fn
 
   # add our data about the server
   echo >> $summary_fn
