@@ -2963,6 +2963,50 @@ static char **copy_argv(int argc, char **argv) {
   return argv_copy;
 }
 
+
+static void OnJitCodeEvent(const JitCodeEvent* event) {
+  static void* last_code_start;
+  static size_t last_code_len;
+  static int last_event_type;
+  static FILE* stream;
+
+  if (stream == NULL) {
+    char filename[1024];
+    snprintf(filename, sizeof(filename), "/tmp/perf-%d.map", (int) getpid());
+    stream = fopen(filename, "w");
+    if (stream == NULL) {
+      V8::SetJitCodeEventHandler(kJitCodeEventDefault, NULL);
+      return;
+    }
+  }
+
+  // V8 bug reports some events twice. Suppress.
+  if (last_event_type == event->type &&
+      last_code_start == event->code_start &&
+      last_code_len == event->code_len) {
+    return;
+  }
+
+  last_event_type = event->type;
+  last_code_start = event->code_start;
+  last_code_len = event->code_len;
+
+  if (event->type == JitCodeEvent::CODE_ADDED ||
+      event->type == JitCodeEvent::CODE_MOVED) {
+    const char* fmt = "%lx %lx %.*s\n";
+    if (event->type == JitCodeEvent::CODE_MOVED) {
+      fmt = "%lx %lx %.*s (moved)\n";
+    }
+    fprintf(stream,
+            fmt,
+            reinterpret_cast<long>(event->code_start),
+            static_cast<long>(event->code_len),
+            static_cast<int>(event->name.len),
+            event->name.str);
+  }
+}
+
+
 int Start(int argc, char *argv[]) {
   // Hack aroung with the argv pointer. Used for process.title = "blah".
   argv = uv_setup_args(argc, argv);
@@ -2976,6 +3020,7 @@ int Start(int argc, char *argv[]) {
   Init(argc, argv_copy);
 
   V8::Initialize();
+  V8::SetJitCodeEventHandler(kJitCodeEventEnumExisting, OnJitCodeEvent);
   {
     Locker locker;
     HandleScope handle_scope;
