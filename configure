@@ -29,6 +29,14 @@ parser.add_option("--libdir",
     dest="libdir",
     help="Where to install libraries (default: PREFIX/lib)")
 
+parser.add_option("--mandir",
+    action="store",
+    dest="mandir",
+    help="Where to install man pages (default: PREFIX/%s)" %
+         ('man' if 'freebsd' in sys.platform
+                or 'openbsd' in sys.platform
+                else 'share/man'))
+
 parser.add_option("--without-npm",
     action="store_true",
     dest="without_npm",
@@ -360,6 +368,7 @@ def configure_node(o):
   o['variables']['v8_no_strict_aliasing'] = 1 # work around compiler bugs
   o['variables']['node_prefix'] = os.path.expanduser(options.prefix or '')
   o['variables']['node_libdir'] = os.path.expanduser(options.libdir or '')
+  o['variables']['node_mandir'] = os.path.expanduser(options.mandir or '')
   o['variables']['node_install_npm'] = b(not options.without_npm)
   o['variables']['node_install_waf'] = b(not options.without_waf)
   o['variables']['node_unsafe_optimizations'] = (

@@ -20,6 +20,7 @@ import sys
 destdir = None
 node_prefix = None
 node_libdir = None
+node_mandir = None
 target_defaults = None
 variables = None
 
@@ -245,11 +246,7 @@ def files(action):
   # work when cross-compiling and besides, there's at least one linux flavor
   # with dtrace support now (oracle's "unbreakable" linux)
   action(['src/node.d'], node_libdir, 'dtrace/')
-
-  if 'freebsd' in sys.platform or 'openbsd' in sys.platform:
-    action(['doc/node.1'], node_prefix, 'man/man1/')
-  else:
-    action(['doc/node.1'], node_prefix, 'share/man/man1/')
+  action(['doc/node.1'], node_mandir, 'man1/')
 
   if 'true' == variables.get('node_install_waf'): waf_files(action)
   if 'true' == variables.get('node_install_npm'): npm_files(action)
@@ -259,6 +256,7 @@ def run(args):
   global destdir
   global node_prefix
   global node_libdir
+  global node_mandir
   global target_defaults
   global variables
 
@@ -271,6 +269,13 @@ def run(args):
 
   node_prefix = variables.get('node_prefix') or '/usr/local'
   node_libdir = variables.get('node_libdir') or os.path.join(node_prefix, 'lib')
+  node_mandir = variables.get('node_mandir')
+
+  if not node_mandir:
+    default = ('man' if 'freebsd' in sys.platform
+                     or 'openbsd' in sys.platform
+                     else 'share/man')
+    node_mandir = os.path.join(node_prefix, default)
 
   # argv[2] is a custom install prefix for packagers (think DESTDIR)
   destdir = os.path.abspath(args[2]) if args[2:3] and args[2] else ''
