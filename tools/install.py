@@ -19,6 +19,7 @@ import sys
 # set at init time
 destdir = None
 node_prefix = None
+node_libdir = None
 target_defaults = None
 variables = None
 
@@ -127,7 +128,7 @@ def waf_files(action):
           'tools/wafadmin/TaskGen.py',
           'tools/wafadmin/Task.py',
           'tools/wafadmin/Utils.py'],
-          node_prefix, 'lib/node/wafadmin/')
+          node_libdir, 'node/wafadmin/')
   action(['tools/wafadmin/Tools/ar.py',
           'tools/wafadmin/Tools/cc.py',
           'tools/wafadmin/Tools/ccroot.py',
@@ -161,23 +162,22 @@ def waf_files(action):
           'tools/wafadmin/Tools/winres.py',
           'tools/wafadmin/Tools/xlc.py',
           'tools/wafadmin/Tools/xlcxx.py'],
-          node_prefix, 'lib/node/wafadmin/Tools/')
+          node_libdir, 'node/wafadmin/Tools/')
 
 
-def update_shebang(prefix, path, shebang):
-  path = abspath(prefix, path)
-  print 'updating shebang of %s to %s' % (path, shebang)
-  s = open(path, 'r').read()
+def update_shebang(filename, shebang):
+  print 'updating shebang of %s to %s' % (filename, shebang)
+  s = open(filename, 'r').read()
   s = re.sub(r'#!.*\n', '#!' + shebang + '\n', s)
-  open(path, 'w').write(s)
+  open(filename, 'w').write(s)
 
 
 def npm_files(action):
-  target_path = 'lib/node_modules/npm/'
+  target_path = 'node_modules/npm/'
 
   # don't install npm if the target path is a symlink, it probably means
   # that a dev version of npm is installed there
-  if os.path.islink(abspath(node_prefix, target_path)): return
+  if os.path.islink(abspath(node_libdir, target_path)): return
 
   # npm has a *lot* of files and it'd be a pain to maintain a fixed list here
   # so we walk its source directory instead...
@@ -185,7 +185,7 @@ def npm_files(action):
     subdirs[:] = filter('test'.__ne__, subdirs) # skip test suites
     paths = [os.path.join(dirname, basename) for basename in basenames]
     action(paths,
-           node_prefix,
+           node_libdir,
            target_path + dirname[9:] + '/')
 
   # create/remove symlink
@@ -193,9 +193,12 @@ def npm_files(action):
   if action == uninstall:
     action([link_path], node_prefix, 'bin/npm')
   elif action == install:
-    try_symlink('../lib/node_modules/npm/bin/npm-cli.js',
+    source_path = os.path.join(node_libdir,
+                               'node_modules/npm/bin/npm-cli.js')
+    try_symlink(source_path,
                 node_prefix,
                 link_path)
+
     if os.environ.get('PORTABLE'):
       # This crazy hack is necessary to make the shebang execute the copy
       # of node relative to the same directory as the npm script. The precompiled
@@ -205,7 +208,9 @@ def npm_files(action):
       shebang = '/bin/sh\n// 2>/dev/null; exec "`dirname "$0"`/node" "$0" "$@"'
     else:
       shebang = os.path.join(node_prefix, 'bin/node')
-    update_shebang(node_prefix, link_path, shebang)
+
+    filename = os.path.join(destdir + source_path)
+    update_shebang(filename, shebang)
   else:
     assert(0) # unhandled action type
 
@@ -239,7 +244,7 @@ def files(action):
   # install unconditionally, checking if the platform supports dtrace doesn't
   # work when cross-compiling and besides, there's at least one linux flavor
   # with dtrace support now (oracle's "unbreakable" linux)
-  action(['src/node.d'], node_prefix, 'lib/dtrace/')
+  action(['src/node.d'], node_libdir, 'dtrace/')
 
   if 'freebsd' in sys.platform or 'openbsd' in sys.platform:
     action(['doc/node.1'], node_prefix, 'man/man1/')
@@ -251,7 +256,11 @@ def files(action):
 
 
 def run(args):
-  global destdir, node_prefix, target_defaults, variables
+  global destdir
+  global node_prefix
+  global node_libdir
+  global target_defaults
+  global variables
 
   # chdir to the project's top-level directory
   os.chdir(os.path.join(os.path.dirname(__file__), '..'))
@@ -261,6 +270,7 @@ def run(args):
   target_defaults = conf['target_defaults']
 
   node_prefix = variables.get('node_prefix') or '/usr/local'
+  node_libdir = variables.get('node_libdir') or os.path.join(node_prefix, 'lib')
 
   # argv[2] is a custom install prefix for packagers (think DESTDIR)
   destdir = os.path.abspath(args[2]) if args[2:3] and args[2] else ''
