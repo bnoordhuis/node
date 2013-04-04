@@ -199,6 +199,15 @@ Handle<String> Factory::InternalizeTwoByteString(Vector<const uc16> string) {
 }
 
 
+Handle<String> Factory::NewStringFromOneByte(int length,
+                                             PretenureFlag pretenure) {
+  CALL_HEAP_FUNCTION(
+      isolate(),
+      isolate()->heap()->AllocateRawOneByteString(length, pretenure),
+      String);
+}
+
+
 Handle<String> Factory::NewStringFromOneByte(Vector<const uint8_t> string,
                                              PretenureFlag pretenure) {
   CALL_HEAP_FUNCTION(
@@ -206,6 +215,7 @@ Handle<String> Factory::NewStringFromOneByte(Vector<const uint8_t> string,
       isolate()->heap()->AllocateStringFromOneByte(string, pretenure),
       String);
 }
+
 
 Handle<String> Factory::NewStringFromUtf8(Vector<const char> string,
                                           PretenureFlag pretenure) {

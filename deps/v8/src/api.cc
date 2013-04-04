@@ -5193,6 +5193,27 @@ Local<String> v8::String::New(const char* data, int length) {
 }
 
 
+Local<String> v8::String::New(int length) {
+  ASSERT(length >= 0);
+  i::Isolate* isolate = i::Isolate::Current();
+  EnsureInitializedForIsolate(isolate, "v8::String::New()");
+  LOG_API(isolate, "String::New(int)");
+  if (length == 0) return Empty();
+  ENTER_V8(isolate);
+  i::Handle<i::String> result =
+      isolate->factory()->NewStringFromOneByte(length);
+  return Utils::ToLocal(result);
+}
+
+
+uint8_t* v8::String::UnsafeMutablePointer() {
+  i::Isolate* isolate = Utils::OpenHandle(this)->GetIsolate();
+  if (IsDeadCheck(isolate, "v8::String::UnsafeMutablePointer()")) return 0;
+  i::Handle<i::Object> obj = Utils::OpenHandle(this);
+  return i::SeqOneByteString::cast(*obj)->GetChars();
+}
+
+
 Local<String> v8::String::Concat(Handle<String> left, Handle<String> right) {
   i::Handle<i::String> left_string = Utils::OpenHandle(*left);
   i::Isolate* isolate = left_string->GetIsolate();

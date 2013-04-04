@@ -99,6 +99,7 @@
         'src/stream_wrap.cc',
         'src/slab_allocator.cc',
         'src/tcp_wrap.cc',
+        'src/tcps_wrap.cc',
         'src/timer_wrap.cc',
         'src/tty_wrap.cc',
         'src/process_wrap.cc',

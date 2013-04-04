@@ -370,6 +370,19 @@ Handle<Value> Buffer::AsciiSlice(const Arguments &args) {
 }
 
 
+Handle<Value> Buffer::Latin1Slice(const Arguments &args) {
+  HandleScope scope(node_isolate);
+  Buffer* parent = ObjectWrap::Unwrap<Buffer>(args.This());
+  SLICE_ARGS(args[0], args[1])
+  char* data = parent->data_ + start;
+  int length = end - start;
+  Local<String> string = String::New(length);
+  uint8_t* ptr = string->UnsafeMutablePointer();
+  memcpy(ptr, data, length);
+  return scope.Close(string);
+}
+
+
 Handle<Value> Buffer::Utf8Slice(const Arguments &args) {
   HandleScope scope(node_isolate);
   Buffer *parent = ObjectWrap::Unwrap<Buffer>(args.This());
@@ -1108,6 +1121,9 @@ void Buffer::Initialize(Handle<Object> target) {
   // TODO NODE_SET_PROTOTYPE_METHOD(t, "utf16Slice", Utf16Slice);
   // copy
   NODE_SET_PROTOTYPE_METHOD(constructor_template, "utf8Slice", Buffer::Utf8Slice);
+  NODE_SET_PROTOTYPE_METHOD(constructor_template,
+                            "latin1Slice",
+                            Buffer::Latin1Slice);
 
   NODE_SET_PROTOTYPE_METHOD(constructor_template, "utf8Write", Buffer::Utf8Write);
   NODE_SET_PROTOTYPE_METHOD(constructor_template, "asciiWrite", Buffer::AsciiWrite);

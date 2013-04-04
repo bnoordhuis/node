@@ -113,6 +113,11 @@ class Factory {
   //     two byte.
   //
   // ASCII strings are pretenured when used as keys in the SourceCodeCache.
+
+  // Allocates raw uninitialized memory for a one byte string.
+  Handle<String> NewStringFromOneByte(
+      int length,
+      PretenureFlag pretenure = NOT_TENURED);
   Handle<String> NewStringFromOneByte(
       Vector<const uint8_t> str,
       PretenureFlag pretenure = NOT_TENURED);

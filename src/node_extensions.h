@@ -34,6 +34,7 @@ NODE_EXT_LIST_ITEM(node_zlib)
 // libuv rewrite
 NODE_EXT_LIST_ITEM(node_timer_wrap)
 NODE_EXT_LIST_ITEM(node_tcp_wrap)
+NODE_EXT_LIST_ITEM(node_tcps_wrap)  // string instead of buffer based
 NODE_EXT_LIST_ITEM(node_udp_wrap)
 NODE_EXT_LIST_ITEM(node_pipe_wrap)
 NODE_EXT_LIST_ITEM(node_cares_wrap)

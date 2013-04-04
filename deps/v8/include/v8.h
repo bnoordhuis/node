@@ -1179,6 +1179,7 @@ class V8EXPORT String : public Primitive {
                 int length = -1,
                 int* nchars_ref = NULL,
                 int options = NO_OPTIONS) const;
+  uint8_t* UnsafeMutablePointer();
 
   /**
    * A zero length string.
@@ -1298,6 +1299,11 @@ class V8EXPORT String : public Primitive {
   const ExternalAsciiStringResource* GetExternalAsciiStringResource() const;
 
   V8_INLINE(static String* Cast(v8::Value* obj));
+
+  /**
+   * Allocates raw, unitialized memory for a string.
+   */
+  static Local<String> New(int length);
 
   /**
    * Allocates a new string from either UTF-8 encoded or ASCII data.

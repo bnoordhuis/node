@@ -116,6 +116,7 @@ class NODE_EXTERN Buffer: public ObjectWrap {
   static v8::Handle<v8::Value> BinarySlice(const v8::Arguments &args);
   static v8::Handle<v8::Value> AsciiSlice(const v8::Arguments &args);
   static v8::Handle<v8::Value> Base64Slice(const v8::Arguments &args);
+  static v8::Handle<v8::Value> Latin1Slice(const v8::Arguments &args);
   static v8::Handle<v8::Value> Utf8Slice(const v8::Arguments &args);
   static v8::Handle<v8::Value> Ucs2Slice(const v8::Arguments &args);
   static v8::Handle<v8::Value> HexSlice(const v8::Arguments &args);
