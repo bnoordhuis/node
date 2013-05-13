@@ -79,7 +79,6 @@ typedef int mode_t;
 #include "node_systemtap.h"
 #endif
 #include "node_script.h"
-#include "v8_typed_array.h"
 
 using namespace v8;
 
@@ -3051,6 +3050,8 @@ char** Init(int argc, char *argv[]) {
     SetResourceConstraints(&constraints); // Must be done before V8::Initialize
   }
   V8::SetFlagsFromCommandLine(&v8argc, v8argv, false);
+  V8::SetFlagsFromString("--harmony_typed_arrays",
+                         sizeof("--harmony_typed_arrays") - 1);
 
   // Fetch a reference to the main isolate, so we have a reference to it
   // even when we need it to access it from another (debugger) thread.
@@ -3181,7 +3182,6 @@ int Start(int argc, char *argv[]) {
 
     // Use original argv, as we're just copying values out of it.
     Handle<Object> process_l = SetupProcessObject(argc, argv);
-    v8_typed_array::AttachBindings(context->Global());
 
     // Create all the objects, load modules, do everything.
     // so your next reading stop should be node::Load()!
