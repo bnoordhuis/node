@@ -22,6 +22,7 @@
 #include "node.h"
 #include "ngx-queue.h"
 #include "handle_wrap.h"
+#include <limits.h>  // CHAR_BIT
 
 namespace node {
 
@@ -118,6 +119,17 @@ HandleWrap::HandleWrap(Handle<Object> object, uv_handle_t* h) {
   object_ = v8::Persistent<v8::Object>::New(node_isolate, object);
   object_->SetAlignedPointerInInternalField(0, this);
   ngx_queue_insert_tail(&handle_wrap_queue, &handle_wrap_queue_);
+
+  // Turn the address of the handle into a base32 encoded string.
+  static const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  uintptr_t address = reinterpret_cast<uintptr_t>(h);
+  char string[CHAR_BIT * sizeof(address) / 5 + 1];
+  unsigned n = 0;
+  while (address != 0) {
+    string[n++] = alphabet[address & 31];
+    address >>= 5;
+  }
+  object->Set(String::New("id"), String::New(string, n));
 }
 
 
