@@ -111,9 +111,6 @@ void StreamWrap::Initialize(Handle<Object> target) {
 StreamWrap::StreamWrap(Handle<Object> object, uv_stream_t* stream)
     : HandleWrap(object, reinterpret_cast<uv_handle_t*>(stream)) {
   stream_ = stream;
-  if (stream) {
-    stream->data = this;
-  }
 }
 
 
@@ -127,13 +124,6 @@ Handle<Value> StreamWrap::GetFD(Local<String>, const AccessorInfo& args) {
   if (wrap != NULL && wrap->stream_ != NULL) fd = wrap->stream_->io_watcher.fd;
   return scope.Close(Integer::New(fd));
 #endif
-}
-
-
-void StreamWrap::SetHandle(uv_handle_t* h) {
-  HandleWrap::SetHandle(h);
-  stream_ = reinterpret_cast<uv_stream_t*>(h);
-  stream_->data = this;
 }
 
 

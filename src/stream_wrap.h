@@ -50,7 +50,6 @@ class StreamWrap : public HandleWrap {
 
  protected:
   StreamWrap(v8::Handle<v8::Object> object, uv_stream_t* stream);
-  virtual void SetHandle(uv_handle_t* h);
   void StateChange() { }
   void UpdateWriteQueueSize();
 

@@ -51,7 +51,6 @@ private:
 
 FSEventWrap::FSEventWrap(Handle<Object> object)
     : HandleWrap(object, reinterpret_cast<uv_handle_t*>(&handle_)) {
-  handle_.data = static_cast<void*>(this);
   initialized_ = false;
 }
 
