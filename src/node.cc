@@ -178,7 +178,7 @@ Isolate* node_isolate = NULL;
 
 
 static void Spin(uv_idle_t* handle, int status) {
-  assert((uv_idle_t*) handle == &tick_spinner);
+  assert(handle == &tick_spinner);
   assert(status == 0);
 
   // Avoid entering a V8 scope.
@@ -2650,7 +2650,7 @@ static void EnableDebug(bool wait_connect) {
   uv_async_init(uv_default_loop(),
                 &dispatch_debug_messages_async,
                 DispatchDebugMessagesAsyncCallback);
-  uv_unref((uv_handle_t*) &dispatch_debug_messages_async);
+  uv_unref(reinterpret_cast<uv_handle_t*>(&dispatch_debug_messages_async));
 
   // Start the debug thread and it's associated TCP server on port 5858.
   bool r = v8::Debug::EnableAgent("node " NODE_VERSION,
@@ -2937,7 +2937,7 @@ char** Init(int argc, char *argv[]) {
   uv_idle_init(uv_default_loop(), &tick_spinner);
 
   uv_check_init(uv_default_loop(), &check_immediate_watcher);
-  uv_unref((uv_handle_t*) &check_immediate_watcher);
+  uv_unref(reinterpret_cast<uv_handle_t*>(&check_immediate_watcher));
   uv_idle_init(uv_default_loop(), &idle_immediate_dummy);
 
   V8::SetFatalErrorHandler(node::OnFatalError);
@@ -2956,7 +2956,7 @@ char** Init(int argc, char *argv[]) {
     static uv_signal_t signal_watcher;
     uv_signal_init(uv_default_loop(), &signal_watcher);
     uv_signal_start(&signal_watcher, EnableDebugSignalHandler, SIGUSR1);
-    uv_unref((uv_handle_t*)&signal_watcher);
+    uv_unref(reinterpret_cast<uv_handle_t*>(&signal_watcher));
 #endif // __POSIX__
   }
 
