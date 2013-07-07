@@ -48,7 +48,11 @@ class TimerWrap : public HandleWrap {
     constructor->InstanceTemplate()->SetInternalFieldCount(1);
     constructor->SetClassName(String::NewSymbol("Timer"));
 
-    NODE_SET_METHOD(constructor, "now", Now);
+    Local<Object> timestamp_obj = Object::New();
+    timestamp_obj->SetIndexedPropertiesToExternalArrayData(
+        &timestamp, v8::kExternalDoubleArray, 1);
+    constructor->Set(String::New("timestamp"), timestamp_obj);
+    NODE_SET_METHOD(constructor, "update", Update);
 
     NODE_SET_PROTOTYPE_METHOD(constructor, "close", HandleWrap::Close);
     NODE_SET_PROTOTYPE_METHOD(constructor, "ref", HandleWrap::Ref);
@@ -141,15 +145,15 @@ class TimerWrap : public HandleWrap {
     MakeCallback(wrap->object(), ontimeout_sym, ARRAY_SIZE(argv), argv);
   }
 
-  static void Now(const FunctionCallbackInfo<Value>& args) {
-    HandleScope scope(node_isolate);
-    double now = static_cast<double>(uv_now(uv_default_loop()));
-    args.GetReturnValue().Set(now);
+  static void Update(const FunctionCallbackInfo<Value>& args) {
+    timestamp = static_cast<double>(uv_now(uv_default_loop()));
   }
 
+  static double timestamp;
   uv_timer_t handle_;
 };
 
+double TimerWrap::timestamp;
 
 }  // namespace node
 
