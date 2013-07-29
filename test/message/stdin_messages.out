@@ -1,66 +1,66 @@
 [stdin]
 
-[stdin]:1
-with(this){__filename}
-^^^^
+[stdin]-wrapper:6
+return require("vm").runInThisContext("with(this){__filename}", "[stdin]", 0,
+                     ^
 SyntaxError: Strict mode code may not include a with statement
-    at Object.<anonymous> ([stdin]-wrapper:*:*)
-    at Module._compile (module.js:*:*)
-    at evalScript (node.js:*:*)
-    at Socket.<anonymous> (node.js:*:*)
-    at Socket.EventEmitter.emit (events.js:*:*)
-    at _stream_readable.js:*:*
-    at process._tickCallback (node.js:*:*)
+    at Object.<anonymous> ([stdin]-wrapper:6:22)
+    at Module._compile (module.js:449:26)
+    at evalScript (node.js:458:25)
+    at Socket.<anonymous> (node.js:154:11)
+    at Socket.EventEmitter.emit (events.js:121:20)
+    at _stream_readable.js:876:16
+    at process._tickCallback (node.js:373:11)
 42
 42
 
-[stdin]:1
-throw new Error("hello")
-      ^
+[stdin]-wrapper:6
+return require("vm").runInThisContext("throw new Error(\"hello\")", "[stdin]",
+                     ^
 Error: hello
-    at [stdin]:1:*
-    at Object.<anonymous> ([stdin]-wrapper:*:*)
-    at Module._compile (module.js:*:*)
-    at evalScript (node.js:*:*)
-    at Socket.<anonymous> (node.js:*:*)
-    at Socket.EventEmitter.emit (events.js:*:*)
-    at _stream_readable.js:*:*
-    at process._tickCallback (node.js:*:*)
+    at [stdin]:1:7
+    at Object.<anonymous> ([stdin]-wrapper:6:22)
+    at Module._compile (module.js:449:26)
+    at evalScript (node.js:458:25)
+    at Socket.<anonymous> (node.js:154:11)
+    at Socket.EventEmitter.emit (events.js:121:20)
+    at _stream_readable.js:876:16
+    at process._tickCallback (node.js:373:11)
 
-[stdin]:1
-throw new Error("hello")
-      ^
+[stdin]-wrapper:6
+return require("vm").runInThisContext("throw new Error(\"hello\")", "[stdin]",
+                     ^
 Error: hello
-    at [stdin]:1:*
-    at Object.<anonymous> ([stdin]-wrapper:*:*)
-    at Module._compile (module.js:*:*)
-    at evalScript (node.js:*:*)
-    at Socket.<anonymous> (node.js:*:*)
-    at Socket.EventEmitter.emit (events.js:*:*)
-    at _stream_readable.js:*:*
-    at process._tickCallback (node.js:*:*)
+    at [stdin]:1:7
+    at Object.<anonymous> ([stdin]-wrapper:6:22)
+    at Module._compile (module.js:449:26)
+    at evalScript (node.js:458:25)
+    at Socket.<anonymous> (node.js:154:11)
+    at Socket.EventEmitter.emit (events.js:121:20)
+    at _stream_readable.js:876:16
+    at process._tickCallback (node.js:373:11)
 100
 
-[stdin]:1
-var x = 100; y = x;
-               ^
+[stdin]-wrapper:6
+return require("vm").runInThisContext("var x = 100; y = x;", "[stdin]", 0, tru
+                     ^
 ReferenceError: y is not defined
     at [stdin]:1:16
-    at Object.<anonymous> ([stdin]-wrapper:*:*)
-    at Module._compile (module.js:*:*)
-    at evalScript (node.js:*:*)
-    at Socket.<anonymous> (node.js:*:*)
-    at Socket.EventEmitter.emit (events.js:*:*)
-    at _stream_readable.js:*:*
-    at process._tickCallback (node.js:*:*)
+    at Object.<anonymous> ([stdin]-wrapper:6:22)
+    at Module._compile (module.js:449:26)
+    at evalScript (node.js:458:25)
+    at Socket.<anonymous> (node.js:154:11)
+    at Socket.EventEmitter.emit (events.js:121:20)
+    at _stream_readable.js:876:16
+    at process._tickCallback (node.js:373:11)
 
-[stdin]:1
-var ______________________________________________; throw 10
-                                                    ^
+[stdin]-wrapper:6
+return require("vm").runInThisContext("var ___________________________________
+                     ^
 10
 
-[stdin]:1
-var ______________________________________________; throw 10
-                                                    ^
+[stdin]-wrapper:6
+return require("vm").runInThisContext("var ___________________________________
+                     ^
 10
 done

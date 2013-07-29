@@ -1,58 +1,58 @@
 [eval]
 
-[eval]:1
-with(this){__filename}
-^^^^
+[eval]-wrapper:6
+return require("vm").runInThisContext("with(this){__filename}", "[eval]", 0, t
+                     ^
 SyntaxError: Strict mode code may not include a with statement
-    at Object.<anonymous> ([eval]-wrapper:*:*)
-    at Module._compile (module.js:*:*)
-    at evalScript (node.js:*:*)
-    at startup (node.js:*:*)
-    at node.js:*:*
+    at Object.<anonymous> ([eval]-wrapper:6:22)
+    at Module._compile (module.js:449:26)
+    at evalScript (node.js:458:25)
+    at startup (node.js:80:7)
+    at node.js:819:3
 42
 42
 
-[eval]:1
-throw new Error("hello")
-      ^
+[eval]-wrapper:6
+return require("vm").runInThisContext("throw new Error(\"hello\")", "[eval]",
+                     ^
 Error: hello
     at [eval]:1:7
-    at Object.<anonymous> ([eval]-wrapper:*:*)
-    at Module._compile (module.js:*:*)
-    at evalScript (node.js:*:*)
-    at startup (node.js:*:*)
-    at node.js:*:*
+    at Object.<anonymous> ([eval]-wrapper:6:22)
+    at Module._compile (module.js:449:26)
+    at evalScript (node.js:458:25)
+    at startup (node.js:80:7)
+    at node.js:819:3
 
-[eval]:1
-throw new Error("hello")
-      ^
+[eval]-wrapper:6
+return require("vm").runInThisContext("throw new Error(\"hello\")", "[eval]",
+                     ^
 Error: hello
     at [eval]:1:7
-    at Object.<anonymous> ([eval]-wrapper:*:*)
-    at Module._compile (module.js:*:*)
-    at evalScript (node.js:*:*)
-    at startup (node.js:*:*)
-    at node.js:*:*
+    at Object.<anonymous> ([eval]-wrapper:6:22)
+    at Module._compile (module.js:449:26)
+    at evalScript (node.js:458:25)
+    at startup (node.js:80:7)
+    at node.js:819:3
 100
 
-[eval]:1
-var x = 100; y = x;
-               ^
+[eval]-wrapper:6
+return require("vm").runInThisContext("var x = 100; y = x;", "[eval]", 0, true
+                     ^
 ReferenceError: y is not defined
     at [eval]:1:16
-    at Object.<anonymous> ([eval]-wrapper:*:*)
-    at Module._compile (module.js:*:*)
-    at evalScript (node.js:*:*)
-    at startup (node.js:*:*)
-    at node.js:*:*
+    at Object.<anonymous> ([eval]-wrapper:6:22)
+    at Module._compile (module.js:449:26)
+    at evalScript (node.js:458:25)
+    at startup (node.js:80:7)
+    at node.js:819:3
 
-[eval]:1
-var ______________________________________________; throw 10
-                                                    ^
+[eval]-wrapper:6
+return require("vm").runInThisContext("var ___________________________________
+                     ^
 10
 
-[eval]:1
-var ______________________________________________; throw 10
-                                                    ^
+[eval]-wrapper:6
+return require("vm").runInThisContext("var ___________________________________
+                     ^
 10
 done
