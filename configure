@@ -14,80 +14,49 @@ root_dir = os.path.dirname(__file__)
 sys.path.insert(0, os.path.join(root_dir, 'tools', 'gyp', 'pylib'))
 from gyp.common import GetFlavor
 
-# parse our options
+# Options should be in alphabetical order but keep --prefix at the top.
 parser = argparse.ArgumentParser()
-
-parser.add_argument("--debug",
-    action="store_true",
-    dest="debug",
-    help="Also build debug build")
 
 parser.add_argument("--prefix",
     action="store",
     dest="prefix",
     help="Select the install prefix (defaults to /usr/local)")
 
-parser.add_argument("--without-npm",
+parser.add_argument("--debug",
     action="store_true",
-    dest="without_npm",
-    help="Don\'t install the bundled npm package manager")
+    dest="debug",
+    help="Also build debug build")
 
-parser.add_argument("--without-ssl",
+parser.add_argument("--dest-cpu",
+    action="store",
+    dest="dest_cpu",
+    help="CPU architecture to build for. Valid values are: arm, ia32, x64")
+
+parser.add_argument("--dest-os",
+    action="store",
+    dest="dest_os",
+    help="Operating system to build for. Valid values are: "
+         "win, mac, solaris, freebsd, openbsd, linux, android")
+
+parser.add_argument("--gdb",
     action="store_true",
-    dest="without_ssl",
-    help="Build without SSL")
+    dest="gdb",
+    help="add gdb support")
 
-parser.add_argument("--without-snapshot",
+parser.add_argument("--ninja",
     action="store_true",
-    dest="without_snapshot",
-    help="Build without snapshotting V8 libraries. You might want to set"
-         " this for cross-compiling. [Default: False]")
+    dest="use_ninja",
+    help="Generate files for the ninja build system")
 
-parser.add_argument("--shared-v8",
+parser.add_argument("--no-ifaddrs",
     action="store_true",
-    dest="shared_v8",
-    help="Link to a shared V8 DLL instead of static linking")
+    dest="no_ifaddrs",
+    help="Use on deprecated SunOS systems that do not support ifaddrs.h")
 
-parser.add_argument("--shared-v8-includes",
-    action="store",
-    dest="shared_v8_includes",
-    help="Directory containing V8 header files")
-
-parser.add_argument("--shared-v8-libpath",
-    action="store",
-    dest="shared_v8_libpath",
-    help="A directory to search for the shared V8 DLL")
-
-parser.add_argument("--shared-v8-libname",
-    action="store",
-    dest="shared_v8_libname",
-    help="Alternative lib name to link to (default: 'v8')")
-
-parser.add_argument("--shared-openssl",
+parser.add_argument("--no-ssl2",
     action="store_true",
-    dest="shared_openssl",
-    help="Link to a shared OpenSSl DLL instead of static linking")
-
-parser.add_argument("--shared-openssl-includes",
-    action="store",
-    dest="shared_openssl_includes",
-    help="Directory containing OpenSSL header files")
-
-parser.add_argument("--shared-openssl-libpath",
-    action="store",
-    dest="shared_openssl_libpath",
-    help="A directory to search for the shared OpenSSL DLLs")
-
-parser.add_argument("--shared-openssl-libname",
-    action="store",
-    dest="shared_openssl_libname",
-    help="Alternative lib name to link to (default: 'crypto,ssl')")
-
-# deprecated
-parser.add_argument("--openssl-use-sys",
-    action="store_true",
-    dest="shared_openssl",
-    help=argparse.SUPPRESS)
+    dest="no_ssl2",
+    help="Disable OpenSSL v2")
 
 # deprecated
 parser.add_argument("--openssl-includes",
@@ -101,57 +70,11 @@ parser.add_argument("--openssl-libpath",
     dest="shared_openssl_libpath",
     help=argparse.SUPPRESS)
 
-# TODO document when we've decided on what the tracing API and its options will
-# look like
-parser.add_argument("--systemtap-includes",
-    action="store",
-    dest="systemtap_includes",
+# deprecated
+parser.add_argument("--openssl-use-sys",
+    action="store_true",
+    dest="shared_openssl",
     help=argparse.SUPPRESS)
-
-parser.add_argument("--no-ssl2",
-    action="store_true",
-    dest="no_ssl2",
-    help="Disable OpenSSL v2")
-
-parser.add_argument("--shared-zlib",
-    action="store_true",
-    dest="shared_zlib",
-    help="Link to a shared zlib DLL instead of static linking")
-
-parser.add_argument("--shared-zlib-includes",
-    action="store",
-    dest="shared_zlib_includes",
-    help="Directory containing zlib header files")
-
-parser.add_argument("--shared-zlib-libpath",
-    action="store",
-    dest="shared_zlib_libpath",
-    help="A directory to search for the shared zlib DLL")
-
-parser.add_argument("--shared-zlib-libname",
-    action="store",
-    dest="shared_zlib_libname",
-    help="Alternative lib name to link to (default: 'z')")
-
-parser.add_argument("--shared-http-parser",
-    action="store_true",
-    dest="shared_http_parser",
-    help="Link to a shared http_parser DLL instead of static linking")
-
-parser.add_argument("--shared-http-parser-includes",
-    action="store",
-    dest="shared_http_parser_includes",
-    help="Directory containing http_parser header files")
-
-parser.add_argument("--shared-http-parser-libpath",
-    action="store",
-    dest="shared_http_parser_libpath",
-    help="A directory to search for the shared http_parser DLL")
-
-parser.add_argument("--shared-http-parser-libname",
-    action="store",
-    dest="shared_http_parser_libname",
-    help="Alternative lib name to link to (default: 'http_parser')")
 
 parser.add_argument("--shared-cares",
     action="store_true",
@@ -163,15 +86,35 @@ parser.add_argument("--shared-cares-includes",
     dest="shared_cares_includes",
     help="Directory containing cares header files")
 
+parser.add_argument("--shared-cares-libname",
+    action="store",
+    dest="shared_cares_libname",
+    help="Alternative lib name to link to (default: 'cares')")
+
 parser.add_argument("--shared-cares-libpath",
     action="store",
     dest="shared_cares_libpath",
     help="A directory to search for the shared cares DLL")
 
-parser.add_argument("--shared-cares-libname",
+parser.add_argument("--shared-http-parser",
+    action="store_true",
+    dest="shared_http_parser",
+    help="Link to a shared http_parser DLL instead of static linking")
+
+parser.add_argument("--shared-http-parser-includes",
     action="store",
-    dest="shared_cares_libname",
-    help="Alternative lib name to link to (default: 'cares')")
+    dest="shared_http_parser_includes",
+    help="Directory containing http_parser header files")
+
+parser.add_argument("--shared-http-parser-libname",
+    action="store",
+    dest="shared_http_parser_libname",
+    help="Alternative lib name to link to (default: 'http_parser')")
+
+parser.add_argument("--shared-http-parser-libpath",
+    action="store",
+    dest="shared_http_parser_libpath",
+    help="A directory to search for the shared http_parser DLL")
 
 parser.add_argument("--shared-libuv",
     action="store_true",
@@ -183,67 +126,80 @@ parser.add_argument("--shared-libuv-includes",
     dest="shared_libuv_includes",
     help="Directory containing libuv header files")
 
-parser.add_argument("--shared-libuv-libpath",
-    action="store",
-    dest="shared_libuv_libpath",
-    help="A directory to search for the shared libuv DLL")
-
 parser.add_argument("--shared-libuv-libname",
     action="store",
     dest="shared_libuv_libname",
     help="Alternative lib name to link to (default: 'uv')")
 
-parser.add_argument("--with-dtrace",
-    action="store_true",
-    dest="with_dtrace",
-    help="Build with DTrace (default is true on sunos)")
-
-parser.add_argument("--without-dtrace",
-    action="store_true",
-    dest="without_dtrace",
-    help="Build without DTrace")
-
-parser.add_argument("--with-etw",
-    action="store_true",
-    dest="with_etw",
-    help="Build with ETW (default is true on Windows)")
-
-parser.add_argument("--without-etw",
-    action="store_true",
-    dest="without_etw",
-    help="Build without ETW")
-
-parser.add_argument("--with-perfctr",
-    action="store_true",
-    dest="with_perfctr",
-    help="Build with performance counters (default is true on Windows)")
-
-parser.add_argument("--without-perfctr",
-    action="store_true",
-    dest="without_perfctr",
-    help="Build without performance counters")
-
-# CHECKME does this still work with recent releases of V8?
-parser.add_argument("--gdb",
-    action="store_true",
-    dest="gdb",
-    help="add gdb support")
-
-parser.add_argument("--dest-cpu",
+parser.add_argument("--shared-libuv-libpath",
     action="store",
-    dest="dest_cpu",
-    help="CPU architecture to build for. Valid values are: arm, ia32, x64")
+    dest="shared_libuv_libpath",
+    help="A directory to search for the shared libuv DLL")
 
-parser.add_argument("--dest-os",
-    action="store",
-    dest="dest_os",
-    help="Operating system to build for. Valid values are: "
-         "win, mac, solaris, freebsd, openbsd, linux, android")
-
-parser.add_argument("--no-ifaddrs",
+parser.add_argument("--shared-openssl",
     action="store_true",
-    dest="no_ifaddrs",
-    help="Use on deprecated SunOS systems that do not support ifaddrs.h")
+    dest="shared_openssl",
+    help="Link to a shared OpenSSl DLL instead of static linking")
+
+parser.add_argument("--shared-openssl-includes",
+    action="store",
+    dest="shared_openssl_includes",
+    help="Directory containing OpenSSL header files")
+
+parser.add_argument("--shared-openssl-libname",
+    action="store",
+    dest="shared_openssl_libname",
+    help="Alternative lib name to link to (default: 'crypto,ssl')")
+
+parser.add_argument("--shared-openssl-libpath",
+    action="store",
+    dest="shared_openssl_libpath",
+    help="A directory to search for the shared OpenSSL DLLs")
+
+parser.add_argument("--shared-v8",
+    action="store_true",
+    dest="shared_v8",
+    help="Link to a shared V8 DLL instead of static linking")
+
+parser.add_argument("--shared-v8-includes",
+    action="store",
+    dest="shared_v8_includes",
+    help="Directory containing V8 header files")
+
+parser.add_argument("--shared-v8-libname",
+    action="store",
+    dest="shared_v8_libname",
+    help="Alternative lib name to link to (default: 'v8')")
+
+parser.add_argument("--shared-v8-libpath",
+    action="store",
+    dest="shared_v8_libpath",
+    help="A directory to search for the shared V8 DLL")
+
+parser.add_argument("--shared-zlib",
+    action="store_true",
+    dest="shared_zlib",
+    help="Link to a shared zlib DLL instead of static linking")
+
+parser.add_argument("--shared-zlib-includes",
+    action="store",
+    dest="shared_zlib_includes",
+    help="Directory containing zlib header files")
+
+parser.add_argument("--shared-zlib-libname",
+    action="store",
+    dest="shared_zlib_libname",
+    help="Alternative lib name to link to (default: 'z')")
+
+parser.add_argument("--shared-zlib-libpath",
+    action="store",
+    dest="shared_zlib_libpath",
+    help="A directory to search for the shared zlib DLL")
+
+parser.add_argument("--tag",
+    action="store",
+    dest="tag",
+    help="Custom build tag")
 
 parser.add_argument("--with-arm-float-abi",
     action="store",
@@ -251,20 +207,63 @@ parser.add_argument("--with-arm-float-abi",
     help="Specifies which floating-point ABI to use. Valid values are: "
          "soft, softfp, hard")
 
-parser.add_argument("--ninja",
+parser.add_argument("--with-dtrace",
     action="store_true",
-    dest="use_ninja",
-    help="Generate files for the ninja build system")
+    dest="with_dtrace",
+    help="Build with DTrace (default is true on sunos)")
+
+parser.add_argument("--with-etw",
+    action="store_true",
+    dest="with_etw",
+    help="Build with ETW (default is true on Windows)")
+
+parser.add_argument("--with-perfctr",
+    action="store_true",
+    dest="with_perfctr",
+    help="Build with performance counters (default is true on Windows)")
+
+parser.add_argument("--without-dtrace",
+    action="store_true",
+    dest="without_dtrace",
+    help="Build without DTrace")
+
+parser.add_argument("--without-etw",
+    action="store_true",
+    dest="without_etw",
+    help="Build without ETW")
+
+parser.add_argument("--without-npm",
+    action="store_true",
+    dest="without_npm",
+    help="Don't install the bundled npm package manager")
+
+parser.add_argument("--without-perfctr",
+    action="store_true",
+    dest="without_perfctr",
+    help="Build without performance counters")
+
+parser.add_argument("--without-snapshot",
+    action="store_true",
+    dest="without_snapshot",
+    help="Build without snapshotting V8 libraries. You might want to set"
+         " this for cross-compiling. [Default: False]")
+
+parser.add_argument("--without-ssl",
+    action="store_true",
+    dest="without_ssl",
+    help="Build without SSL")
+
+# TODO document when we've decided on what the tracing API and its options will
+# look like
+parser.add_argument("--systemtap-includes",
+    action="store",
+    dest="systemtap_includes",
+    help=argparse.SUPPRESS)
 
 parser.add_argument("--xcode",
     action="store_true",
     dest="use_xcode",
     help="Generate build files for use with xcode")
-
-parser.add_argument("--tag",
-    action="store",
-    dest="tag",
-    help="Custom build tag")
 
 options = parser.parse_args()
 
