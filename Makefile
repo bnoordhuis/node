@@ -14,6 +14,12 @@ NODE ?= ./node
 # or set the V environment variable to an empty string.
 V ?= 1
 
+ifeq ($(USE_NINJA),1)
+ifneq ($(V),)
+NINJA := $(NINJA) -v
+endif
+endif
+
 # Changes to these files trigger a gyp update and rebuild.
 BUILD_DEPS = \
 	common.gypi \
