@@ -7,6 +7,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 
 CC = os.environ.get('CC', 'cc')
 
@@ -687,3 +688,12 @@ else:
   gyp_args = ['-f', 'make-' + flavor]
 
 subprocess.call([sys.executable, 'tools/gyp_node'] + gyp_args)
+
+# We write out config.gypi before invoking gyp. As a result, its timestamp will
+# be older than out/Makefile or out/*/ninja.build. We want to force a rebuild
+# after a configuration change so touch the file now.
+#
+# We could have the Makefile generate the gyp build file but that breaks
+# `./configure && ninja -C out/Release` workflows (i.e. _my_ workflow.)
+timestamp = time.time() + 1
+os.utime('config.gypi', (timestamp, timestamp))

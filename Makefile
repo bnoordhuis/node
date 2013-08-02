@@ -14,46 +14,55 @@ NODE ?= ./node
 # or set the V environment variable to an empty string.
 V ?= 1
 
+# Changes to these files trigger a gyp update and rebuild.
+BUILD_DEPS = \
+	common.gypi \
+	config.gypi \
+	deps/http_parser/http_parser.gyp \
+	deps/uv/uv.gyp \
+	deps/v8/build/features.gypi \
+	deps/v8/build/toolchain.gypi \
+	deps/v8/tools/gyp/v8.gyp \
+	deps/zlib/zlib.gyp \
+	node.gyp
+
 # BUILDTYPE=Debug builds both release and debug builds. If you want to compile
-# just the debug build, run `make -C out BUILDTYPE=Debug` instead.
+# just the debug build, run `make node_g`.
 ifeq ($(BUILDTYPE),Release)
-all: out/Makefile node
+all: node
 else
-all: out/Makefile node node_g
+all: node node_g
 endif
 
-# The .PHONY is needed to ensure that we recursively use the out/Makefile
-# to check for changes.
-.PHONY: node node_g
+node: out/Release/node
+	ln -fs $< $@
+
+node_g: out/Debug/node
+	ln -fs $< $@
 
 ifeq ($(USE_NINJA),1)
-node: config.gypi
-	$(NINJA) -C out/Release/
-	ln -fs out/Release/node node
-
-node_g: config.gypi
-	$(NINJA) -C out/Debug/
-	ln -fs out/Debug/node $@
+out/Debug/node: out/Debug/build.ninja
+out/Release/node: out/Release/build.ninja
 else
-node: config.gypi out/Makefile
-	$(MAKE) -C out BUILDTYPE=Release V=$(V)
-	ln -fs out/Release/node node
-
-node_g: config.gypi out/Makefile
+out/Debug/node: out/Makefile
 	$(MAKE) -C out BUILDTYPE=Debug V=$(V)
-	ln -fs out/Debug/node $@
+out/Release/node: out/Makefile
+	$(MAKE) -C out BUILDTYPE=Release V=$(V)
 endif
 
-out/Makefile: common.gypi deps/uv/uv.gyp deps/http_parser/http_parser.gyp deps/zlib/zlib.gyp deps/v8/build/toolchain.gypi deps/v8/build/features.gypi deps/v8/tools/gyp/v8.gyp node.gyp config.gypi
-ifeq ($(USE_NINJA),1)
-	touch out/Makefile
+out/Debug/build.ninja out/Release/build.ninja: $(BUILD_DEPS)
 	$(PYTHON) tools/gyp_node -f ninja
-else
+	$(NINJA) -C $(@D)
+
+out/Makefile: $(BUILD_DEPS)
 	$(PYTHON) tools/gyp_node -f make
-endif
 
 config.gypi: configure
-	$(PYTHON) ./configure
+	if [ -f $@ ]; then
+		$(error Stale $@, please re-run ./configure)
+	else
+		$(error No $@, please run ./configure first)
+	endif
 
 install: all
 	$(PYTHON) tools/install.py $@ '$(DESTDIR)' '$(PREFIX)'
