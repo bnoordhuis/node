@@ -19,8 +19,9 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('--prefix',
     action='store',
+    default='/usr/local',
     dest='prefix',
-    help='Select the install prefix (defaults to /usr/local)')
+    help='Select the install prefix (default: \'%(default)s\')')
 
 parser.add_argument('--debug',
     action='store_true',
@@ -29,14 +30,15 @@ parser.add_argument('--debug',
 
 parser.add_argument('--dest-cpu',
     action='store',
+    choices='arm ia32 x64'.split(),
     dest='dest_cpu',
-    help='CPU architecture to build for. Valid values are: arm, ia32, x64')
+    help='CPU architecture to build for')
 
 parser.add_argument('--dest-os',
     action='store',
+    choices='android freebsd linux mac openbsd solaris win'.split(),
     dest='dest_os',
-    help='Operating system to build for. Valid values are: '
-         'win, mac, solaris, freebsd, openbsd, linux, android')
+    help='Operating system to build for')
 
 parser.add_argument('--gdb',
     action='store_true',
@@ -88,8 +90,9 @@ parser.add_argument('--shared-cares-includes',
 
 parser.add_argument('--shared-cares-libname',
     action='store',
+    default='cares',
     dest='shared_cares_libname',
-    help='Alternative lib name to link to (default: \'cares\')')
+    help='Alternative lib name to link to (default: \'%(default)s\')')
 
 parser.add_argument('--shared-cares-libpath',
     action='store',
@@ -108,8 +111,9 @@ parser.add_argument('--shared-http-parser-includes',
 
 parser.add_argument('--shared-http-parser-libname',
     action='store',
+    default='http_parser',
     dest='shared_http_parser_libname',
-    help='Alternative lib name to link to (default: \'http_parser\')')
+    help='Alternative lib name to link to (default: \'%(default)s\')')
 
 parser.add_argument('--shared-http-parser-libpath',
     action='store',
@@ -128,8 +132,9 @@ parser.add_argument('--shared-libuv-includes',
 
 parser.add_argument('--shared-libuv-libname',
     action='store',
+    default='uv',
     dest='shared_libuv_libname',
-    help='Alternative lib name to link to (default: \'uv\')')
+    help='Alternative lib name to link to (default: \'%(default)s\')')
 
 parser.add_argument('--shared-libuv-libpath',
     action='store',
@@ -148,8 +153,9 @@ parser.add_argument('--shared-openssl-includes',
 
 parser.add_argument('--shared-openssl-libname',
     action='store',
+    default='crypto,ssl',
     dest='shared_openssl_libname',
-    help='Alternative lib name to link to (default: \'crypto,ssl\')')
+    help='Alternative lib name to link to (default: \'%(default)s\')')
 
 parser.add_argument('--shared-openssl-libpath',
     action='store',
@@ -168,8 +174,9 @@ parser.add_argument('--shared-v8-includes',
 
 parser.add_argument('--shared-v8-libname',
     action='store',
+    default='v8',
     dest='shared_v8_libname',
-    help='Alternative lib name to link to (default: \'v8\')')
+    help='Alternative lib name to link to (default: \'%(default)s\')')
 
 parser.add_argument('--shared-v8-libpath',
     action='store',
@@ -188,8 +195,9 @@ parser.add_argument('--shared-zlib-includes',
 
 parser.add_argument('--shared-zlib-libname',
     action='store',
+    default='z',
     dest='shared_zlib_libname',
-    help='Alternative lib name to link to (default: \'z\')')
+    help='Alternative lib name to link to (default: \'%(default)s\')')
 
 parser.add_argument('--shared-zlib-libpath',
     action='store',
@@ -203,9 +211,9 @@ parser.add_argument('--tag',
 
 parser.add_argument('--with-arm-float-abi',
     action='store',
+    choices='soft softfp hard'.split(),
     dest='arm_float_abi',
-    help='Specifies which floating-point ABI to use. Valid values are: '
-         'soft, softfp, hard')
+    help='Specifies which floating-point ABI to use')
 
 parser.add_argument('--with-dtrace',
     action='store_true',
@@ -244,9 +252,10 @@ parser.add_argument('--without-perfctr',
 
 parser.add_argument('--without-snapshot',
     action='store_true',
+    default=False,
     dest='without_snapshot',
     help='Build without snapshotting V8 libraries. You might want to set'
-         ' this for cross-compiling. [Default: False]')
+         ' this for cross-compiling (default: %(default)s)')
 
 parser.add_argument('--without-ssl',
     action='store_true',
@@ -436,7 +445,7 @@ def configure_node(o):
     o['variables']['OS'] = 'android'
   o['variables']['v8_enable_gdbjit'] = 1 if options.gdb else 0
   o['variables']['v8_no_strict_aliasing'] = 1 # work around compiler bugs
-  o['variables']['node_prefix'] = os.path.expanduser(options.prefix or '')
+  o['variables']['node_prefix'] = os.path.expanduser(options.prefix)
   o['variables']['node_install_npm'] = b(not options.without_npm)
   o['default_configuration'] = 'Debug' if options.debug else 'Release'
 
@@ -502,75 +511,34 @@ def configure_node(o):
     o['variables']['node_tag'] = ''
 
 
-def configure_libz(o):
-  o['variables']['node_shared_zlib'] = b(options.shared_zlib)
-
-  # assume shared_zlib if one of these is set?
-  if options.shared_zlib_libpath:
-    o['libraries'] += ['-L%s' % options.shared_zlib_libpath]
-  if options.shared_zlib_libname:
-    o['libraries'] += ['-l%s' % options.shared_zlib_libname]
-  elif options.shared_zlib:
-    o['libraries'] += ['-lz']
-  if options.shared_zlib_includes:
-    o['include_dirs'] += [options.shared_zlib_includes]
+def configure_cares(o):
+  o['variables']['node_shared_cares'] = b(options.shared_cares)
+  if options.shared_cares:
+    o['libraries'] += ['-l%s' % options.shared_cares_libname]
+    if options.shared_cares_includes:
+      o['include_dirs'] += [options.shared_cares_includes]
+    if options.shared_cares_libpath:
+      o['libraries'] += ['-L%s' % options.shared_cares_libpath]
 
 
 def configure_http_parser(o):
-    o['variables']['node_shared_http_parser'] = b(options.shared_http_parser)
-
-    # assume shared http_parser if one of these is set?
-    if options.shared_http_parser_libpath:
-        o['libraries'] += ['-L%s' % options.shared_http_parser_libpath]
-    if options.shared_http_parser_libname:
-        o['libraries'] += ['-l%s' % options.shared_http_parser_libname]
-    elif options.shared_http_parser:
-        o['libraries'] += ['-lhttp_parser']
+  o['variables']['node_shared_http_parser'] = b(options.shared_http_parser)
+  if options.shared_http_parser:
+    o['libraries'] += ['-l%s' % options.shared_http_parser_libname]
     if options.shared_http_parser_includes:
-        o['include_dirs'] += [options.shared_http_parser_includes]
-
-
-def configure_cares(o):
-    o['variables']['node_shared_cares'] = b(options.shared_cares)
-
-    # assume shared cares if one of these is set?
-    if options.shared_cares_libpath:
-        o['libraries'] += ['-L%s' % options.shared_cares_libpath]
-    if options.shared_cares_libname:
-        o['libraries'] += ['-l%s' % options.shared_cares_libname]
-    elif options.shared_cares:
-        o['libraries'] += ['-lcares']
-    if options.shared_cares_includes:
-        o['include_dirs'] += [options.shared_cares_includes]
+      o['include_dirs'] += [options.shared_http_parser_includes]
+    if options.shared_http_parser_libpath:
+      o['libraries'] += ['-L%s' % options.shared_http_parser_libpath]
 
 
 def configure_libuv(o):
   o['variables']['node_shared_libuv'] = b(options.shared_libuv)
-
-  # assume shared libuv if one of these is set?
-  if options.shared_libuv_libpath:
-    o['libraries'] += ['-L%s' % options.shared_libuv_libpath]
-  if options.shared_libuv_libname:
+  if options.shared_libuv:
     o['libraries'] += ['-l%s' % options.shared_libuv_libname]
-  elif options.shared_libuv:
-    o['libraries'] += ['-luv']
-  if options.shared_libuv_includes:
-    o['include_dirs'] += [options.shared_libuv_includes]
-
-
-def configure_v8(o):
-  o['variables']['v8_use_snapshot'] = b(not options.without_snapshot)
-  o['variables']['node_shared_v8'] = b(options.shared_v8)
-
-  # assume shared_v8 if one of these is set?
-  if options.shared_v8_libpath:
-    o['libraries'] += ['-L%s' % options.shared_v8_libpath]
-  if options.shared_v8_libname:
-    o['libraries'] += ['-l%s' % options.shared_v8_libname]
-  elif options.shared_v8:
-    o['libraries'] += ['-lv8']
-  if options.shared_v8_includes:
-    o['include_dirs'] += [options.shared_v8_includes]
+    if options.shared_libuv_includes:
+      o['include_dirs'] += [options.shared_libuv_includes]
+    if options.shared_libuv_libpath:
+      o['libraries'] += ['-L%s' % options.shared_libuv_libpath]
 
 
 def configure_openssl(o):
@@ -583,22 +551,55 @@ def configure_openssl(o):
   if options.no_ssl2:
     o['defines'] += ['OPENSSL_NO_SSL2=1']
 
+  # TODO(bnoordhuis) Our implicit use of pkg-config here is questionable.
+  # We don't do it for --shared-zlib and what's more, it may pull in more
+  # dependencies than just libssl and libcrypto.
+  #
+  # OpenSSL is often linked against libz. If the user links against
+  # a different version of libz with --shared-libz, bad things can
+  # and probably will happen.
+  #
+  # It may be partially mitigated by the fact that node.js doesn't use
+  # SSL compression (which is what OpenSSL links against libz for) but
+  # that means we're at the mercy of the platform's dynamic linker:
+  # LD_BIND_NOW=1 may crash the node binary while LD_BIND_NOW= doesn't.
   if options.shared_openssl:
     (libs, cflags) = pkg_config('openssl') or ('-lssl -lcrypto', '')
-
-    if options.shared_openssl_libpath:
-      o['libraries'] += ['-L%s' % options.shared_openssl_libpath]
-
-    if options.shared_openssl_libname:
-      libnames = options.shared_openssl_libname.split(',')
-      o['libraries'] += ['-l%s' % s for s in libnames]
-    else:
-      o['libraries'] += libs.split()
 
     if options.shared_openssl_includes:
       o['include_dirs'] += [options.shared_openssl_includes]
     else:
       o['cflags'] += cflags.split()
+
+    if options.shared_openssl_libname:
+      o['libraries'] += (
+          ['-l%s' % s for s in options.shared_openssl_libname.split(',')])
+    else:
+      o['libraries'] += libs.split()
+
+    if options.shared_openssl_libpath:
+      o['libraries'] += ['-L%s' % options.shared_openssl_libpath]
+
+
+def configure_v8(o):
+  o['variables']['v8_use_snapshot'] = b(not options.without_snapshot)
+  o['variables']['node_shared_v8'] = b(options.shared_v8)
+  if options.shared_v8:
+    o['libraries'] += ['-l%s' % options.shared_v8_libname]
+    if options.shared_v8_includes:
+      o['include_dirs'] += [options.shared_v8_includes]
+    if options.shared_v8_libpath:
+      o['libraries'] += ['-L%s' % options.shared_v8_libpath]
+
+
+def configure_libz(o):
+  o['variables']['node_shared_zlib'] = b(options.shared_zlib)
+  if options.shared_zlib:
+    o['libraries'] += ['-l%s' % options.shared_zlib_libname]
+    if options.shared_zlib_includes:
+      o['include_dirs'] += [options.shared_zlib_includes]
+    if options.shared_zlib_libpath:
+      o['libraries'] += ['-L%s' % options.shared_zlib_libpath]
 
 
 def configure_winsdk(o):
