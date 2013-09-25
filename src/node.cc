@@ -46,6 +46,7 @@
 #include "ares.h"
 #include "env.h"
 #include "env-inl.h"
+#include "function-tracer.h"
 #include "handle_wrap.h"
 #include "req_wrap.h"
 #include "string_bytes.h"
@@ -3098,10 +3099,6 @@ void Init(int* argc,
   V8::SetFlagsFromString(typed_arrays_flag, sizeof(typed_arrays_flag) - 1);
   V8::SetArrayBufferAllocator(&ArrayBufferAllocator::the_singleton);
 
-  // Fetch a reference to the main isolate, so we have a reference to it
-  // even when we need it to access it from another (debugger) thread.
-  node_isolate = Isolate::GetCurrent();
-
 #ifdef __POSIX__
   // Ignore SIGPIPE
   RegisterSignalHandler(SIGPIPE, SIG_IGN);
@@ -3217,11 +3214,15 @@ int Start(int argc, char** argv) {
   // Hack around with the argv pointer. Used for process.title = "blah".
   argv = uv_setup_args(argc, argv);
 
+  node_isolate = Isolate::GetCurrent();
+  trace::Initialize(node_isolate);
+
   // This needs to run *before* V8::Initialize().  The const_cast is not
   // optional, in case you're wondering.
   int exec_argc;
   const char** exec_argv;
   Init(&argc, const_cast<const char**>(argv), &exec_argc, &exec_argv);
+  trace::StartJitCodeEventHandler();
 
 #if HAVE_OPENSSL
   // V8 on Windows doesn't have a good source of entropy. Seed it from

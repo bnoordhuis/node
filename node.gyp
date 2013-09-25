@@ -89,6 +89,7 @@
 
       'sources': [
         'src/fs_event_wrap.cc',
+        'src/function-tracer.cc',
         'src/cares_wrap.cc',
         'src/handle_wrap.cc',
         'src/node.cc',
@@ -118,6 +119,7 @@
         # headers to make for a more pleasant IDE experience
         'src/env.h',
         'src/env-inl.h',
+        'src/function-tracer.h',
         'src/handle_wrap.h',
         'src/node.h',
         'src/node_buffer.h',
