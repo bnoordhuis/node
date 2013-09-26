@@ -31,7 +31,6 @@ OUTPUTS	= \
 	x64-elf-gas/rc4/rc4-x86_64.s \
 	x64-elf-gas/rc4/rc4-md5-x86_64.s \
 	x64-elf-gas/sha/sha1-x86_64.s \
-	x64-elf-gas/sha/sha256-x86_64.s \
 	x64-elf-gas/sha/sha512-x86_64.s \
 	x64-elf-gas/whrlpool/wp-x86_64.s \
 	x64-elf-gas/x86_64cpuid.s \
@@ -63,7 +62,6 @@ OUTPUTS	= \
 	x64-macosx-gas/rc4/rc4-x86_64.s \
 	x64-macosx-gas/rc4/rc4-md5-x86_64.s \
 	x64-macosx-gas/sha/sha1-x86_64.s \
-	x64-macosx-gas/sha/sha256-x86_64.s \
 	x64-macosx-gas/sha/sha512-x86_64.s \
 	x64-macosx-gas/whrlpool/wp-x86_64.s \
 	x64-macosx-gas/x86_64cpuid.s \
@@ -95,7 +93,6 @@ OUTPUTS	= \
 	x64-win32-masm/rc4/rc4-x86_64.asm \
 	x64-win32-masm/rc4/rc4-md5-x86_64.asm \
 	x64-win32-masm/sha/sha1-x86_64.asm \
-	x64-win32-masm/sha/sha256-x86_64.asm \
 	x64-win32-masm/sha/sha512-x86_64.asm \
 	x64-win32-masm/whrlpool/wp-x86_64.asm \
 	x64-win32-masm/x86_64cpuid.asm \
@@ -135,7 +132,6 @@ x64-elf-gas/rc4/rc4-x86_64.s: ../openssl/crypto/rc4/asm/rc4-x86_64.pl
 x64-elf-gas/rc4/rc4-md5-x86_64.s: ../openssl/crypto/rc4/asm/rc4-md5-x86_64.pl
 x64-elf-gas/sha/sha1-x86_64.s: ../openssl/crypto/sha/asm/sha1-x86_64.pl
 x64-elf-gas/sha/sha512-x86_64.s: ../openssl/crypto/sha/asm/sha512-x86_64.pl
-x64-elf-gas/sha/sha256-x86_64.s: ../openssl/crypto/sha/asm/sha256-x86_64.pl
 x64-elf-gas/whrlpool/wp-x86_64.s: ../openssl/crypto/whrlpool/asm/wp-x86_64.pl
 x64-elf-gas/x86_64cpuid.s: ../openssl/crypto/x86_64cpuid.pl
 x64-macosx-gas/aes/aes-x86_64.s: ../openssl/crypto/aes/asm/aes-x86_64.pl
@@ -148,7 +144,6 @@ x64-macosx-gas/md5/md5-x86_64.s: ../openssl/crypto/md5/asm/md5-x86_64.pl
 x64-macosx-gas/rc4/rc4-x86_64.s: ../openssl/crypto/rc4/asm/rc4-x86_64.pl
 x64-macosx-gas/rc4/rc4-md5-x86_64.s: ../openssl/crypto/rc4/asm/rc4-md5-x86_64.pl
 x64-macosx-gas/sha/sha1-x86_64.s: ../openssl/crypto/sha/asm/sha1-x86_64.pl
-x64-macosx-gas/sha/sha256-x86_64.s: ../openssl/crypto/sha/asm/sha256-x86_64.pl
 x64-macosx-gas/sha/sha512-x86_64.s: ../openssl/crypto/sha/asm/sha512-x86_64.pl
 x64-macosx-gas/whrlpool/wp-x86_64.s: ../openssl/crypto/whrlpool/asm/wp-x86_64.pl
 x64-macosx-gas/x86_64cpuid.s: ../openssl/crypto/x86_64cpuid.pl
@@ -162,7 +157,6 @@ x64-win32-masm/md5/md5-x86_64.asm: ../openssl/crypto/md5/asm/md5-x86_64.pl
 x64-win32-masm/rc4/rc4-x86_64.asm: ../openssl/crypto/rc4/asm/rc4-x86_64.pl
 x64-win32-masm/rc4/rc4-md5-x86_64.asm: ../openssl/crypto/rc4/asm/rc4-md5-x86_64.pl
 x64-win32-masm/sha/sha1-x86_64.asm: ../openssl/crypto/sha/asm/sha1-x86_64.pl
-x64-win32-masm/sha/sha256-x86_64.asm: ../openssl/crypto/sha/asm/sha256-x86_64.pl
 x64-win32-masm/sha/sha512-x86_64.asm: ../openssl/crypto/sha/asm/sha512-x86_64.pl
 x64-win32-masm/whrlpool/wp-x86_64.asm: ../openssl/crypto/whrlpool/asm/wp-x86_64.pl
 x64-win32-masm/x86_64cpuid.asm: ../openssl/crypto/x86_64cpuid.pl
