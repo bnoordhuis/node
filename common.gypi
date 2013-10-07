@@ -11,6 +11,10 @@
     'clang%': 0,
     'python%': 'python',
 
+    # This regrettably mirrors deps/v8/build/common.gypi
+    'v8_use_mips_abi_hardfloat%': 'true',
+    'mips_arch_variant%': 'mips32r2',
+
     # Turn on optimizations that may trigger compiler bugs.
     # Use at your own risk. Do *NOT* report bugs if this option is enabled.
     'node_unsafe_optimizations%': 0,
@@ -176,6 +180,27 @@
           [ 'target_arch=="x64"', {
             'cflags': [ '-m64' ],
             'ldflags': [ '-m64' ],
+          }],
+          # This regrettably mirrors deps/v8/build/common.gypi
+          [ 'target_arch=="mipsel"', {
+            'conditions': [
+              [ 'v8_use_mips_abi_hardfloat=="true"', {
+                'cflags': [ '-mhard-float' ],
+                'ldflags': [ '-mhard-float' ],
+              }, {
+                'cflags': [ '-msoft-float' ],
+                'ldflags': [ '-msoft-float' ],
+              }],
+              [ 'mips_arch_variant=="mips32r2"', {
+                'cflags': [ '-mips32r2', '-Wa,-mips32r2' ],
+              }],
+              [ 'mips_arch_variant=="mips32r1"', {
+                'cflags': [ '-mips32', '-Wa,-mips32' ],
+              }],
+              [ 'mips_arch_variant=="loongson"', {
+                'cflags': [ '-mips3', '-Wa,-mips3' ],
+              }],
+            ],
           }],
           [ 'OS=="solaris"', {
             'cflags': [ '-pthreads' ],
