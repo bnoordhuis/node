@@ -30,6 +30,7 @@ process.on('beforeExit', function() { deaths++; } );
 process.once('beforeExit', tryImmediate);
 
 function tryImmediate() {
+  console.log('set immediate');
   setImmediate(function() {
     revivals++;
     process.once('beforeExit', tryTimer);
@@ -37,13 +38,16 @@ function tryImmediate() {
 }
 
 function tryTimer() {
+  console.log('set a timeout');
   setTimeout(function () {
+    console.log('timeout cb, do another once beforeExit');
     revivals++;
     process.once('beforeExit', tryListen);
   }, 1);
 }
 
 function tryListen() {
+  console.log('create a server');
   net.createServer()
     .listen(0)
     .on('listening', function() {
@@ -53,6 +57,6 @@ function tryListen() {
 }
 
 process.on('exit', function() {
-  assert(4 === deaths);
-  assert(3 === revivals);
+  assert.equal(4, deaths);
+  assert.equal(3, revivals);
 });
