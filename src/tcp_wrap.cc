@@ -343,10 +343,9 @@ void TCPWrap::AfterConnect(uv_connect_t* req, int status) {
   assert(wrap->persistent().IsEmpty() == false);
 
   Local<Object> req_wrap_obj = req_wrap->object();
-  Local<Value> argv[5] = {
+  Local<Value> argv[] = {
     Integer::New(status, node_isolate),
     wrap->object(),
-    req_wrap_obj,
     v8::True(node_isolate),
     v8::True(node_isolate)
   };

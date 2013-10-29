@@ -447,8 +447,7 @@ void StreamWrap::AfterWrite(uv_write_t* req, int status) {
 
   Local<Value> argv[] = {
     Integer::New(status, node_isolate),
-    wrap->object(),
-    req_wrap_obj
+    wrap->object()
   };
 
   MakeCallback(env,
@@ -493,10 +492,9 @@ void StreamWrap::AfterShutdown(uv_shutdown_t* req, int status) {
   HandleScope handle_scope(env->isolate());
 
   Local<Object> req_wrap_obj = req_wrap->object();
-  Local<Value> argv[3] = {
+  Local<Value> argv[] = {
     Integer::New(status, node_isolate),
-    wrap->object(),
-    req_wrap_obj
+    wrap->object()
   };
 
   MakeCallback(env,

@@ -243,10 +243,9 @@ void PipeWrap::AfterConnect(uv_connect_t* req, int status) {
   }
 
   Local<Object> req_wrap_obj = req_wrap->object();
-  Local<Value> argv[5] = {
+  Local<Value> argv[] = {
     Integer::New(status, node_isolate),
     wrap->object(),
-    req_wrap_obj,
     Boolean::New(readable),
     Boolean::New(writable)
   };
