@@ -411,7 +411,8 @@ template <typename Type,
           const Type* (*Find)(const FunctionCallbackInfo<Value>&),
           MethodType (Type::*Method)() const>
 void Bind(const FunctionCallbackInfo<Value>& args) {
-  HandleScope handle_scope(args.GetIsolate());
+  Isolate* isolate = args.GetIsolate();
+  HandleScope handle_scope(isolate);
   if (const Type* obj = Find(args)) {
     args.GetReturnValue().Set(
         Coerce<MethodType, ReturnType>(isolate, (obj->*Method)()));
@@ -481,6 +482,12 @@ void Bind(const FunctionCallbackInfo<Value>& args) {
 }
 
 
+template <typename Type, HeapGraphEdge::Type (Type::*Method)() const>
+void Bind(const FunctionCallbackInfo<Value>& args) {
+  Bind<Type, HeapGraphEdge::Type, int, Find<Type>, Method>(args);
+}
+
+
 void CpuProfileNodeGetChild(const FunctionCallbackInfo<Value>& args) {
   Isolate* isolate = args.GetIsolate();
   HandleScope handle_scope(isolate);
@@ -509,6 +516,18 @@ void HeapProfilerTakeHeapSnapshot(const FunctionCallbackInfo<Value>& args) {
 }
 
 
+void HeapProfilerGetSnapshotCount(const FunctionCallbackInfo<Value>& args) {
+  args.GetReturnValue().Set(
+      args.GetIsolate()->GetHeapProfiler()->GetSnapshotCount());
+}
+
+
+void HeapProfilerDeleteAllHeapSnapshots(
+    const FunctionCallbackInfo<Value>& args) {
+  args.GetIsolate()->GetHeapProfiler()->DeleteAllHeapSnapshots();
+}
+
+
 void InitializeV8Bindings(Handle<Object> target,
                           Handle<Value> unused,
                           Handle<Context> context) {
@@ -534,6 +553,16 @@ void InitializeV8Bindings(Handle<Object> target,
   NODE_SET_METHOD(target,
                   "CpuProfilerGetProfileCount",
                   CpuProfilerGetProfileCount);
+  NODE_SET_METHOD(target, "CpuProfileNodeGetChild", CpuProfileNodeGetChild);
+  NODE_SET_METHOD(target,
+                  "HeapProfilerTakeHeapSnapshot",
+                  HeapProfilerTakeHeapSnapshot);
+  NODE_SET_METHOD(target,
+                  "HeapProfilerGetSnapshotCount",
+                  HeapProfilerGetSnapshotCount);
+  NODE_SET_METHOD(target,
+                  "HeapProfilerDeleteAllHeapSnapshots",
+                  HeapProfilerDeleteAllHeapSnapshots);
 #define V(Type, Method)                                                       \
   NODE_SET_METHOD(target, #Type #Method, Bind<Type, &Type::Method>)
   V(CpuProfile, GetTitle);
@@ -559,11 +588,11 @@ void InitializeV8Bindings(Handle<Object> target,
   V(HeapGraphNode, GetSelfSize);
   V(HeapGraphNode, GetChildrenCount);
   V(HeapGraphNode, GetHeapValue);
+  V(HeapGraphEdge, GetType);
+  V(HeapGraphEdge, GetName);
+  V(HeapGraphEdge, GetFromNode);
+  V(HeapGraphEdge, GetToNode);
 #undef V
-  NODE_SET_METHOD(target, "CpuProfileNodeGetChild", CpuProfileNodeGetChild);
-  NODE_SET_METHOD(target,
-                  "HeapProfilerTakeHeapSnapshot",
-                  HeapProfilerTakeHeapSnapshot);
 }
 
 }  // namespace node
