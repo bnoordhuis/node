@@ -479,6 +479,12 @@ void Bind(const FunctionCallbackInfo<Value>& args) {
 }
 
 
+template <typename Type, HeapGraphNode::Type (Type::*Method)() const>
+void Bind(const FunctionCallbackInfo<Value>& args) {
+  Bind<Type, HeapGraphNode::Type, int, Find<Type>, Method>(args);
+}
+
+
 template <typename Type, HeapGraphEdge::Type (Type::*Method)() const>
 void Bind(const FunctionCallbackInfo<Value>& args) {
   Bind<Type, HeapGraphEdge::Type, int, Find<Type>, Method>(args);
@@ -562,33 +568,34 @@ void InitializeV8Bindings(Handle<Object> target,
                   HeapProfilerDeleteAllHeapSnapshots);
 #define V(Type, Method)                                                       \
   NODE_SET_METHOD(target, #Type #Method, Bind<Type, &Type::Method>)
-  V(CpuProfile, GetTitle);
-  V(CpuProfile, GetTopDownRoot);
+  V(CpuProfile, GetEndTime);
   V(CpuProfile, GetSamplesCount);
   V(CpuProfile, GetStartTime);
-  V(CpuProfile, GetEndTime);
-  V(CpuProfileNode, GetFunctionName);
-  V(CpuProfileNode, GetScriptId);
-  V(CpuProfileNode, GetScriptResourceName);
-  V(CpuProfileNode, GetLineNumber);
-  V(CpuProfileNode, GetColumnNumber);
+  V(CpuProfile, GetTitle);
+  V(CpuProfile, GetTopDownRoot);
   V(CpuProfileNode, GetBailoutReason);
-  V(CpuProfileNode, GetHitCount);
   V(CpuProfileNode, GetCallUid);
   V(CpuProfileNode, GetChildrenCount);
-  V(HeapSnapshot, GetTitle);
-  V(HeapSnapshot, GetRoot);
-  V(HeapSnapshot, GetNodesCount);
-  V(HeapSnapshot, GetMaxSnapshotJSObjectId);
-  V(HeapGraphNode, GetName);
-  V(HeapGraphNode, GetId);
-  V(HeapGraphNode, GetSelfSize);
+  V(CpuProfileNode, GetColumnNumber);
+  V(CpuProfileNode, GetFunctionName);
+  V(CpuProfileNode, GetHitCount);
+  V(CpuProfileNode, GetLineNumber);
+  V(CpuProfileNode, GetScriptId);
+  V(CpuProfileNode, GetScriptResourceName);
+  V(HeapGraphEdge, GetFromNode);
+  V(HeapGraphEdge, GetName);
+  V(HeapGraphEdge, GetToNode);
+  V(HeapGraphEdge, GetType);
   V(HeapGraphNode, GetChildrenCount);
   V(HeapGraphNode, GetHeapValue);
-  V(HeapGraphEdge, GetType);
-  V(HeapGraphEdge, GetName);
-  V(HeapGraphEdge, GetFromNode);
-  V(HeapGraphEdge, GetToNode);
+  V(HeapGraphNode, GetId);
+  V(HeapGraphNode, GetName);
+  V(HeapGraphNode, GetSelfSize);
+  V(HeapGraphNode, GetType);
+  V(HeapSnapshot, GetMaxSnapshotJSObjectId);
+  V(HeapSnapshot, GetNodesCount);
+  V(HeapSnapshot, GetRoot);
+  V(HeapSnapshot, GetTitle);
 #undef V
 }
 
