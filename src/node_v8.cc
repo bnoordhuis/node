@@ -306,24 +306,21 @@ inline const HeapSnapshot* FindHeapSnapshot(Isolate* isolate, int index) {
 
 inline const HeapGraphNode* FindHeapGraphNode(Isolate* isolate,
                                               int snapshot_index,
-                                              int node_index) {
+                                              uint32_t node_id) {
   const HeapSnapshot* snapshot = FindHeapSnapshot(isolate, snapshot_index);
   if (snapshot == NULL) {
     return NULL;
   }
-  if (node_index < 0 || node_index >= snapshot->GetNodesCount()) {
-    return NULL;
-  }
-  return snapshot->GetNode(node_index);
+  return snapshot->GetNodeById(node_id);
 }
 
 
 inline const HeapGraphEdge* FindHeapGraphEdge(Isolate* isolate,
                                               int snapshot_index,
-                                              int node_index,
+                                              uint32_t node_id,
                                               int edge_index) {
   const HeapGraphNode* node =
-      FindHeapGraphNode(isolate, snapshot_index, node_index);
+      FindHeapGraphNode(isolate, snapshot_index, node_id);
   if (node == NULL) {
     return NULL;
   }
@@ -362,7 +359,7 @@ template <>
 const HeapGraphNode* Find(const FunctionCallbackInfo<Value>& args) {
   return FindHeapGraphNode(args.GetIsolate(),
                            args[0]->Int32Value(),
-                           args[1]->Int32Value());
+                           args[1]->Uint32Value());
 }
 
 
@@ -370,7 +367,7 @@ template <>
 const HeapGraphEdge* Find(const FunctionCallbackInfo<Value>& args) {
   return FindHeapGraphEdge(args.GetIsolate(),
                            args[0]->Int32Value(),
-                           args[1]->Int32Value(),
+                           args[1]->Uint32Value(),
                            args[2]->Int32Value());
 }
 
