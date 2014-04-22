@@ -21,6 +21,7 @@
 
 #include "node.h"
 #include "handle_wrap.h"
+#include <unistd.h>
 
 namespace node {
 
@@ -37,6 +38,7 @@ using v8::TryCatch;
 using v8::Context;
 using v8::Arguments;
 using v8::Integer;
+using v8::kExternalDoubleArray;
 
 static Persistent<String> ontimeout_sym;
 
@@ -64,6 +66,14 @@ class TimerWrap : public HandleWrap {
     ontimeout_sym = NODE_PSYMBOL("ontimeout");
 
     target->Set(String::NewSymbol("Timer"), constructor->GetFunction());
+
+    Local<Object> timestamp = Object::New();
+    timestamp->SetIndexedPropertiesToExternalArrayData(&timestamp,
+                                                       kExternalDoubleArray,
+                                                       1);
+    target->Set(String::New("timestamp"), timestamp);
+    uv_thread_create(&updater_thread, Updater, NULL);
+    UpdateTimestamp();
   }
 
  private:
@@ -163,9 +173,26 @@ class TimerWrap : public HandleWrap {
     MakeCallback(wrap->object_, ontimeout_sym, ARRAY_SIZE(argv), argv);
   }
 
+  static void UpdateTimestamp() {
+    const uint64_t now = uv_hrtime();
+    *reinterpret_cast<volatile double*>(&timestamp) = now / (1000 * 1000);
+    __sync_synchronize();
+  }
+
+  static void Updater(void*) {
+    for (;;) {
+      usleep(250 * 1000);
+      UpdateTimestamp();
+    }
+  }
+
   uv_timer_t handle_;
+  static double timestamp;
+  static uv_thread_t updater_thread;
 };
 
+double TimerWrap::timestamp;
+uv_thread_t TimerWrap::updater_thread;
 
 }  // namespace node
 
