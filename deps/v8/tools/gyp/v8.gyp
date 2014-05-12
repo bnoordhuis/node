@@ -1022,6 +1022,9 @@
           ],
         }],
         ['v8_postmortem_support=="true"', {
+          'include_dirs': [
+            '../../src/',
+          ],
           'sources': [
             '<(SHARED_INTERMEDIATE_DIR)/debug-support.cc',
           ]
