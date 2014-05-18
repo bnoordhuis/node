@@ -188,7 +188,7 @@ void SyncProcessStdioPipe::Close() {
 
 Local<Object> SyncProcessStdioPipe::GetOutputAsBuffer() const {
   size_t length = OutputLength();
-  Local<Object> js_buffer = Buffer::New(length);
+  Local<Object> js_buffer = Buffer::New(length)->handle();
   CopyOutput(Buffer::Data(js_buffer));
   return js_buffer;
 }

@@ -686,7 +686,7 @@ Local<Value> StringBytes::Encode(Isolate* isolate,
   Local<String> val;
   switch (encoding) {
     case BUFFER:
-      return scope.Escape(Buffer::New(buf, buflen));
+      return scope.Escape(Buffer::New(buf, buflen)->handle());
 
     case ASCII:
       if (contains_non_ascii(buf, buflen)) {
