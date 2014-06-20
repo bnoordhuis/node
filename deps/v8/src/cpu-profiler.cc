@@ -2,17 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "v8.h"
+#include "src/v8.h"
 
-#include "cpu-profiler-inl.h"
+#include "src/cpu-profiler-inl.h"
 
-#include "compiler.h"
-#include "frames-inl.h"
-#include "hashmap.h"
-#include "log-inl.h"
-#include "vm-state-inl.h"
+#include "src/compiler.h"
+#include "src/frames-inl.h"
+#include "src/hashmap.h"
+#include "src/log-inl.h"
+#include "src/vm-state-inl.h"
 
-#include "../include/v8-profiler.h"
+#include "include/v8-profiler.h"
 
 namespace v8 {
 namespace internal {
@@ -300,6 +300,15 @@ void CpuProfiler::CodeMoveEvent(Address from, Address to) {
   CodeMoveEventRecord* rec = &evt_rec.CodeMoveEventRecord_;
   rec->from = from;
   rec->to = to;
+  processor_->Enqueue(evt_rec);
+}
+
+
+void CpuProfiler::CodeDisableOptEvent(Code* code, SharedFunctionInfo* shared) {
+  CodeEventsContainer evt_rec(CodeEventRecord::CODE_DISABLE_OPT);
+  CodeDisableOptEventRecord* rec = &evt_rec.CodeDisableOptEventRecord_;
+  rec->start = code->address();
+  rec->bailout_reason = GetBailoutReason(shared->DisableOptimizationReason());
   processor_->Enqueue(evt_rec);
 }
 

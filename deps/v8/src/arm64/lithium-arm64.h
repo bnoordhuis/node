@@ -5,11 +5,11 @@
 #ifndef V8_ARM64_LITHIUM_ARM64_H_
 #define V8_ARM64_LITHIUM_ARM64_H_
 
-#include "hydrogen.h"
-#include "lithium-allocator.h"
-#include "lithium.h"
-#include "safepoint-table.h"
-#include "utils.h"
+#include "src/hydrogen.h"
+#include "src/lithium-allocator.h"
+#include "src/lithium.h"
+#include "src/safepoint-table.h"
+#include "src/utils.h"
 
 namespace v8 {
 namespace internal {
@@ -23,6 +23,7 @@ class LCodeGen;
   V(AddI)                                       \
   V(AddS)                                       \
   V(Allocate)                                   \
+  V(AllocateBlockContext)                       \
   V(ApplyArguments)                             \
   V(ArgumentsElements)                          \
   V(ArgumentsLength)                            \
@@ -135,7 +136,8 @@ class LCodeGen;
   V(OsrEntry)                                   \
   V(Parameter)                                  \
   V(Power)                                      \
-  V(PushArgument)                               \
+  V(PreparePushArguments)                       \
+  V(PushArguments)                              \
   V(RegExpLiteral)                              \
   V(Return)                                     \
   V(SeqStringGetChar)                           \
@@ -147,6 +149,7 @@ class LCodeGen;
   V(StackCheck)                                 \
   V(StoreCodeEntry)                             \
   V(StoreContextSlot)                           \
+  V(StoreFrameContext)                          \
   V(StoreGlobalCell)                            \
   V(StoreKeyedExternal)                         \
   V(StoreKeyedFixed)                            \
@@ -1040,17 +1043,15 @@ class LDoubleBits V8_FINAL : public LTemplateInstruction<1, 1, 0> {
 };
 
 
-class LConstructDouble V8_FINAL : public LTemplateInstruction<1, 2, 1> {
+class LConstructDouble V8_FINAL : public LTemplateInstruction<1, 2, 0> {
  public:
-  LConstructDouble(LOperand* hi, LOperand* lo, LOperand* temp) {
+  LConstructDouble(LOperand* hi, LOperand* lo) {
     inputs_[0] = hi;
     inputs_[1] = lo;
-    temps_[0] = temp;
   }
 
   LOperand* hi() { return inputs_[0]; }
   LOperand* lo() { return inputs_[1]; }
-  LOperand* temp() { return temps_[0]; }
 
   DECLARE_CONCRETE_INSTRUCTION(ConstructDouble, "construct-double")
 };
@@ -1288,6 +1289,7 @@ class LDeclareGlobals V8_FINAL : public LTemplateInstruction<0, 1, 0> {
 
 class LDeoptimize V8_FINAL : public LTemplateInstruction<0, 0, 0> {
  public:
+  virtual bool IsControl() const V8_OVERRIDE { return true; }
   DECLARE_CONCRETE_INSTRUCTION(Deoptimize, "deoptimize")
   DECLARE_HYDROGEN_ACCESSOR(Deoptimize)
 };
@@ -1518,7 +1520,7 @@ class LInteger32ToDouble V8_FINAL : public LTemplateInstruction<1, 1, 0> {
 class LCallWithDescriptor V8_FINAL : public LTemplateResultInstruction<1> {
  public:
   LCallWithDescriptor(const CallInterfaceDescriptor* descriptor,
-                      ZoneList<LOperand*>& operands,
+                      const ZoneList<LOperand*>& operands,
                       Zone* zone)
     : descriptor_(descriptor),
       inputs_(descriptor->environment_length() + 1, zone) {
@@ -1758,15 +1760,15 @@ class LLoadKeyed : public LTemplateInstruction<1, 2, T> {
   bool is_typed_elements() const {
     return is_external() || is_fixed_typed_array();
   }
-  uint32_t additional_index() const {
-    return this->hydrogen()->index_offset();
+  uint32_t base_offset() const {
+    return this->hydrogen()->base_offset();
   }
   void PrintDataTo(StringStream* stream) V8_OVERRIDE {
     this->elements()->PrintTo(stream);
     stream->Add("[");
     this->key()->PrintTo(stream);
-    if (this->hydrogen()->IsDehoisted()) {
-      stream->Add(" + %d]", this->additional_index());
+    if (this->base_offset() != 0) {
+      stream->Add(" + %d]", this->base_offset());
     } else {
       stream->Add("]");
     }
@@ -2250,15 +2252,50 @@ class LPower V8_FINAL : public LTemplateInstruction<1, 2, 0> {
 };
 
 
-class LPushArgument V8_FINAL : public LTemplateInstruction<0, 1, 0> {
+class LPreparePushArguments V8_FINAL : public LTemplateInstruction<0, 0, 0> {
  public:
-  explicit LPushArgument(LOperand* value) {
-    inputs_[0] = value;
+  explicit LPreparePushArguments(int argc) : argc_(argc) {}
+
+  inline int argc() const { return argc_; }
+
+  DECLARE_CONCRETE_INSTRUCTION(PreparePushArguments, "prepare-push-arguments")
+
+ protected:
+  int argc_;
+};
+
+
+class LPushArguments V8_FINAL : public LTemplateResultInstruction<0> {
+ public:
+  explicit LPushArguments(Zone* zone,
+                          int capacity = kRecommendedMaxPushedArgs)
+      : zone_(zone), inputs_(capacity, zone) {}
+
+  LOperand* argument(int i) { return inputs_[i]; }
+  int ArgumentCount() const { return inputs_.length(); }
+
+  void AddArgument(LOperand* arg) { inputs_.Add(arg, zone_); }
+
+  DECLARE_CONCRETE_INSTRUCTION(PushArguments, "push-arguments")
+
+  // It is better to limit the number of arguments pushed simultaneously to
+  // avoid pressure on the register allocator.
+  static const int kRecommendedMaxPushedArgs = 4;
+  bool ShouldSplitPush() const {
+    return inputs_.length() >= kRecommendedMaxPushedArgs;
   }
 
-  LOperand* value() { return inputs_[0]; }
+ protected:
+  Zone* zone_;
+  ZoneList<LOperand*> inputs_;
 
-  DECLARE_CONCRETE_INSTRUCTION(PushArgument, "push-argument")
+ private:
+  // Iterator support.
+  virtual int InputCount() V8_FINAL V8_OVERRIDE { return inputs_.length(); }
+  virtual LOperand* InputAt(int i) V8_FINAL V8_OVERRIDE { return inputs_[i]; }
+
+  virtual int TempCount() V8_FINAL V8_OVERRIDE { return 0; }
+  virtual LOperand* TempAt(int i) V8_FINAL V8_OVERRIDE { return NULL; }
 };
 
 
@@ -2420,14 +2457,14 @@ class LStoreKeyed : public LTemplateInstruction<0, 3, T> {
     }
     return this->hydrogen()->NeedsCanonicalization();
   }
-  uint32_t additional_index() const { return this->hydrogen()->index_offset(); }
+  uint32_t base_offset() const { return this->hydrogen()->base_offset(); }
 
   void PrintDataTo(StringStream* stream) V8_OVERRIDE {
     this->elements()->PrintTo(stream);
     stream->Add("[");
     this->key()->PrintTo(stream);
-    if (this->hydrogen()->IsDehoisted()) {
-      stream->Add(" + %d] <-", this->additional_index());
+    if (this->base_offset() != 0) {
+      stream->Add(" + %d] <-", this->base_offset());
     } else {
       stream->Add("] <- ");
     }
@@ -2451,7 +2488,7 @@ class LStoreKeyedExternal V8_FINAL : public LStoreKeyed<1> {
                       LOperand* temp) :
       LStoreKeyed<1>(elements, key, value) {
     temps_[0] = temp;
-  };
+  }
 
   LOperand* temp() { return temps_[0]; }
 
@@ -2465,7 +2502,7 @@ class LStoreKeyedFixed V8_FINAL : public LStoreKeyed<1> {
                    LOperand* temp) :
       LStoreKeyed<1>(elements, key, value) {
     temps_[0] = temp;
-  };
+  }
 
   LOperand* temp() { return temps_[0]; }
 
@@ -2479,7 +2516,7 @@ class LStoreKeyedFixedDouble V8_FINAL : public LStoreKeyed<1> {
                          LOperand* temp) :
       LStoreKeyed<1>(elements, key, value) {
     temps_[0] = temp;
-  };
+  }
 
   LOperand* temp() { return temps_[0]; }
 
@@ -2962,6 +2999,35 @@ class LLoadFieldByIndex V8_FINAL : public LTemplateInstruction<1, 2, 0> {
 };
 
 
+class LStoreFrameContext: public LTemplateInstruction<0, 1, 0> {
+ public:
+  explicit LStoreFrameContext(LOperand* context) {
+    inputs_[0] = context;
+  }
+
+  LOperand* context() { return inputs_[0]; }
+
+  DECLARE_CONCRETE_INSTRUCTION(StoreFrameContext, "store-frame-context")
+};
+
+
+class LAllocateBlockContext: public LTemplateInstruction<1, 2, 0> {
+ public:
+  LAllocateBlockContext(LOperand* context, LOperand* function) {
+    inputs_[0] = context;
+    inputs_[1] = function;
+  }
+
+  LOperand* context() { return inputs_[0]; }
+  LOperand* function() { return inputs_[1]; }
+
+  Handle<ScopeInfo> scope_info() { return hydrogen()->scope_info(); }
+
+  DECLARE_CONCRETE_INSTRUCTION(AllocateBlockContext, "allocate-block-context")
+  DECLARE_HYDROGEN_ACCESSOR(AllocateBlockContext)
+};
+
+
 class LWrapReceiver V8_FINAL : public LTemplateInstruction<1, 2, 0> {
  public:
   LWrapReceiver(LOperand* receiver, LOperand* function) {
@@ -3002,8 +3068,6 @@ class LChunkBuilder V8_FINAL : public LChunkBuilderBase {
 
   // Build the sequence for the graph.
   LPlatformChunk* Build();
-
-  LInstruction* CheckElideControlInstruction(HControlInstruction* instr);
 
   // Declare methods that deal with the individual node types.
 #define DECLARE_DO(type) LInstruction* Do##type(H##type* node);
@@ -3123,6 +3187,7 @@ class LChunkBuilder V8_FINAL : public LChunkBuilderBase {
   LInstruction* AssignEnvironment(LInstruction* instr);
 
   void VisitInstruction(HInstruction* current);
+  void AddInstruction(LInstruction* instr, HInstruction* current);
   void DoBasicBlock(HBasicBlock* block);
 
   int JSShiftAmountFromHConstant(HValue* constant) {

@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "v8.h"
+#include "src/v8.h"
 
 #if V8_TARGET_ARCH_ARM64
 
-#include "bootstrapper.h"
-#include "code-stubs.h"
-#include "regexp-macro-assembler.h"
-#include "stub-cache.h"
+#include "src/bootstrapper.h"
+#include "src/code-stubs.h"
+#include "src/regexp-macro-assembler.h"
+#include "src/stub-cache.h"
 
 namespace v8 {
 namespace internal {
@@ -65,6 +65,11 @@ void FastCloneShallowArrayStub::InitializeInterfaceDescriptor(
   static Register registers[] = { x3, x2, x1 };
   descriptor->register_param_count_ = sizeof(registers) / sizeof(registers[0]);
   descriptor->register_params_ = registers;
+  static Representation representations[] = {
+    Representation::Tagged(),
+    Representation::Smi(),
+    Representation::Tagged() };
+  descriptor->register_param_representations_ = representations;
   descriptor->deoptimization_handler_ =
       Runtime::FunctionForId(
           Runtime::kHiddenCreateArrayLiteralStubBailout)->entry;
@@ -93,6 +98,16 @@ void CreateAllocationSiteStub::InitializeInterfaceDescriptor(
   descriptor->register_param_count_ = sizeof(registers) / sizeof(registers[0]);
   descriptor->register_params_ = registers;
   descriptor->deoptimization_handler_ = NULL;
+}
+
+
+void KeyedLoadGenericElementStub::InitializeInterfaceDescriptor(
+    CodeStubInterfaceDescriptor* descriptor) {
+  static Register registers[] = { x1, x0 };
+  descriptor->register_param_count_ = 2;
+  descriptor->register_params_ = registers;
+  descriptor->deoptimization_handler_ =
+      Runtime::FunctionForId(Runtime::kKeyedGetProperty)->entry;
 }
 
 
@@ -230,6 +245,11 @@ static void InitializeArrayConstructorDescriptor(
     descriptor->register_param_count_ =
         sizeof(registers_variable_args) / sizeof(registers_variable_args[0]);
     descriptor->register_params_ = registers_variable_args;
+    static Representation representations[] = {
+        Representation::Tagged(),
+        Representation::Tagged(),
+        Representation::Integer32() };
+    descriptor->register_param_representations_ = representations;
   }
 
   descriptor->hint_stack_parameter_count_ = constant_stack_parameter_count;
@@ -276,6 +296,10 @@ static void InitializeInternalArrayConstructorDescriptor(
     descriptor->register_param_count_ =
         sizeof(registers_variable_args) / sizeof(registers_variable_args[0]);
     descriptor->register_params_ = registers_variable_args;
+    static Representation representations[] = {
+        Representation::Tagged(),
+        Representation::Integer32() };
+    descriptor->register_param_representations_ = representations;
   }
 
   descriptor->hint_stack_parameter_count_ = constant_stack_parameter_count;
@@ -2097,7 +2121,7 @@ void ArgumentsAccessStub::GenerateNewSloppySlow(MacroAssembler* masm) {
   __ Poke(x10, 1 * kXRegSize);
 
   __ Bind(&runtime);
-  __ TailCallRuntime(Runtime::kHiddenNewArgumentsFast, 3, 1);
+  __ TailCallRuntime(Runtime::kHiddenNewSloppyArguments, 3, 1);
 }
 
 
@@ -2369,7 +2393,7 @@ void ArgumentsAccessStub::GenerateNewSloppyFast(MacroAssembler* masm) {
   // Do the runtime call to allocate the arguments object.
   __ Bind(&runtime);
   __ Push(function, recv_arg, arg_count_smi);
-  __ TailCallRuntime(Runtime::kHiddenNewArgumentsFast, 3, 1);
+  __ TailCallRuntime(Runtime::kHiddenNewSloppyArguments, 3, 1);
 }
 
 
@@ -2502,7 +2526,7 @@ void ArgumentsAccessStub::GenerateNewStrict(MacroAssembler* masm) {
   // Do the runtime call to allocate the arguments object.
   __ Bind(&runtime);
   __ Push(function, params, param_count_smi);
-  __ TailCallRuntime(Runtime::kHiddenNewStrictArgumentsFast, 3, 1);
+  __ TailCallRuntime(Runtime::kHiddenNewStrictArguments, 3, 1);
 }
 
 
@@ -2696,8 +2720,8 @@ void RegExpExecStub::Generate(MacroAssembler* masm) {
   __ Ldrb(string_type, FieldMemOperand(x10, Map::kInstanceTypeOffset));
   STATIC_ASSERT(kSeqStringTag == 0);
   // The underlying external string is never a short external string.
-  STATIC_CHECK(ExternalString::kMaxShortLength < ConsString::kMinLength);
-  STATIC_CHECK(ExternalString::kMaxShortLength < SlicedString::kMinLength);
+  STATIC_ASSERT(ExternalString::kMaxShortLength < ConsString::kMinLength);
+  STATIC_ASSERT(ExternalString::kMaxShortLength < SlicedString::kMinLength);
   __ TestAndBranchIfAnySet(string_type.X(),
                            kStringRepresentationMask,
                            &external_string);  // Go to (7).
@@ -3192,10 +3216,10 @@ static void EmitWrapCase(MacroAssembler* masm, int argc, Label* cont) {
 }
 
 
-void CallFunctionStub::Generate(MacroAssembler* masm) {
-  ASM_LOCATION("CallFunctionStub::Generate");
+static void CallFunctionNoFeedback(MacroAssembler* masm,
+                                   int argc, bool needs_checks,
+                                   bool call_as_method) {
   // x1  function    the function to call
-
   Register function = x1;
   Register type = x4;
   Label slow, non_function, wrap, cont;
@@ -3203,7 +3227,7 @@ void CallFunctionStub::Generate(MacroAssembler* masm) {
   // TODO(jbramley): This function has a lot of unnamed registers. Name them,
   // and tidy things up a bit.
 
-  if (NeedsChecks()) {
+  if (needs_checks) {
     // Check that the function is really a JavaScript function.
     __ JumpIfSmi(function, &non_function);
 
@@ -3213,18 +3237,17 @@ void CallFunctionStub::Generate(MacroAssembler* masm) {
 
   // Fast-case: Invoke the function now.
   // x1  function  pushed function
-  int argc = argc_;
   ParameterCount actual(argc);
 
-  if (CallAsMethod()) {
-    if (NeedsChecks()) {
+  if (call_as_method) {
+    if (needs_checks) {
       EmitContinueIfStrictOrNative(masm, &cont);
     }
 
     // Compute the receiver in sloppy mode.
     __ Peek(x3, argc * kPointerSize);
 
-    if (NeedsChecks()) {
+    if (needs_checks) {
       __ JumpIfSmi(x3, &wrap);
       __ JumpIfObjectType(x3, x10, type, FIRST_SPEC_OBJECT_TYPE, &wrap, lt);
     } else {
@@ -3238,17 +3261,22 @@ void CallFunctionStub::Generate(MacroAssembler* masm) {
                     actual,
                     JUMP_FUNCTION,
                     NullCallWrapper());
-
-  if (NeedsChecks()) {
+  if (needs_checks) {
     // Slow-case: Non-function called.
     __ Bind(&slow);
     EmitSlowCase(masm, argc, function, type, &non_function);
   }
 
-  if (CallAsMethod()) {
+  if (call_as_method) {
     __ Bind(&wrap);
     EmitWrapCase(masm, argc, &cont);
   }
+}
+
+
+void CallFunctionStub::Generate(MacroAssembler* masm) {
+  ASM_LOCATION("CallFunctionStub::Generate");
+  CallFunctionNoFeedback(masm, argc_, NeedsChecks(), CallAsMethod());
 }
 
 
@@ -3331,6 +3359,50 @@ static void EmitLoadTypeFeedbackVector(MacroAssembler* masm, Register vector) {
 }
 
 
+void CallIC_ArrayStub::Generate(MacroAssembler* masm) {
+  // x1 - function
+  // x3 - slot id
+  Label miss;
+  Register function = x1;
+  Register feedback_vector = x2;
+  Register index = x3;
+  Register scratch = x4;
+
+  EmitLoadTypeFeedbackVector(masm, feedback_vector);
+
+  __ LoadGlobalFunction(Context::ARRAY_FUNCTION_INDEX, scratch);
+  __ Cmp(function, scratch);
+  __ B(ne, &miss);
+
+  __ Mov(x0, Operand(arg_count()));
+
+  __ Add(scratch, feedback_vector,
+         Operand::UntagSmiAndScale(index, kPointerSizeLog2));
+  __ Ldr(scratch, FieldMemOperand(scratch, FixedArray::kHeaderSize));
+
+  // Verify that scratch contains an AllocationSite
+  Register map = x5;
+  __ Ldr(map, FieldMemOperand(scratch, HeapObject::kMapOffset));
+  __ JumpIfNotRoot(map, Heap::kAllocationSiteMapRootIndex, &miss);
+
+  Register allocation_site = feedback_vector;
+  __ Mov(allocation_site, scratch);
+  ArrayConstructorStub stub(masm->isolate(), arg_count());
+  __ TailCallStub(&stub);
+
+  __ bind(&miss);
+  GenerateMiss(masm, IC::kCallIC_Customization_Miss);
+
+  // The slow case, we need this no matter what to complete a call after a miss.
+  CallFunctionNoFeedback(masm,
+                         arg_count(),
+                         true,
+                         CallAsMethod());
+
+  __ Unreachable();
+}
+
+
 void CallICStub::Generate(MacroAssembler* masm) {
   ASM_LOCATION("CallICStub");
 
@@ -3390,7 +3462,10 @@ void CallICStub::Generate(MacroAssembler* masm) {
   __ JumpIfRoot(x4, Heap::kUninitializedSymbolRootIndex, &miss);
 
   if (!FLAG_trace_ic) {
-    // We are going megamorphic, and we don't want to visit the runtime.
+    // We are going megamorphic. If the feedback is a JSFunction, it is fine
+    // to handle it here. More complex cases are dealt with in the runtime.
+    __ AssertNotSmi(x4);
+    __ JumpIfNotObjectType(x4, x5, x5, JS_FUNCTION_TYPE, &miss);
     __ Add(x4, feedback_vector,
            Operand::UntagSmiAndScale(index, kPointerSizeLog2));
     __ LoadRoot(x5, Heap::kMegamorphicSymbolRootIndex);
@@ -3400,7 +3475,7 @@ void CallICStub::Generate(MacroAssembler* masm) {
 
   // We are here because tracing is on or we are going monomorphic.
   __ bind(&miss);
-  GenerateMiss(masm);
+  GenerateMiss(masm, IC::kCallIC_Miss);
 
   // the slow case
   __ bind(&slow_start);
@@ -3414,7 +3489,7 @@ void CallICStub::Generate(MacroAssembler* masm) {
 }
 
 
-void CallICStub::GenerateMiss(MacroAssembler* masm) {
+void CallICStub::GenerateMiss(MacroAssembler* masm, IC::UtilityId id) {
   ASM_LOCATION("CallICStub[Miss]");
 
   // Get the receiver of the function from the stack; 1 ~ return address.
@@ -3427,7 +3502,7 @@ void CallICStub::GenerateMiss(MacroAssembler* masm) {
     __ Push(x4, x1, x2, x3);
 
     // Call the entry.
-    ExternalReference miss = ExternalReference(IC_Utility(IC::kCallIC_Miss),
+    ExternalReference miss = ExternalReference(IC_Utility(id),
                                                masm->isolate());
     __ CallExternalReference(miss, 4);
 
@@ -4392,12 +4467,6 @@ void BinaryOpICWithAllocationSiteStub::Generate(MacroAssembler* masm) {
 }
 
 
-bool CodeStub::CanUseFPRegisters() {
-  // FP registers always available on ARM64.
-  return true;
-}
-
-
 void RecordWriteStub::GenerateIncremental(MacroAssembler* masm, Mode mode) {
   // We need some extra registers for this stub, they have been allocated
   // but we need to save them before using them.
@@ -4606,7 +4675,7 @@ void StoreArrayLiteralElementStub::Generate(MacroAssembler* masm) {
   __ JumpIfSmi(value, &smi_element);
 
   // Jump if array's ElementsKind is not FAST_ELEMENTS or FAST_HOLEY_ELEMENTS.
-  __ Tbnz(bitfield2, MaskToBit(FAST_ELEMENTS << Map::kElementsKindShift),
+  __ Tbnz(bitfield2, MaskToBit(FAST_ELEMENTS << Map::ElementsKindBits::kShift),
           &fast_elements);
 
   // Store into the array literal requires an elements transition. Call into
@@ -4646,7 +4715,7 @@ void StoreArrayLiteralElementStub::Generate(MacroAssembler* masm) {
 
 
 void StubFailureTrampolineStub::Generate(MacroAssembler* masm) {
-  CEntryStub ces(isolate(), 1, fp_registers_ ? kSaveFPRegs : kDontSaveFPRegs);
+  CEntryStub ces(isolate(), 1, kSaveFPRegs);
   __ Call(ces.GetCode(), RelocInfo::CODE_TARGET);
   int parameter_count_offset =
       StubFailureTrampolineFrame::kCallerStackParameterCountFrameOffset;
@@ -4661,22 +4730,31 @@ void StubFailureTrampolineStub::Generate(MacroAssembler* masm) {
 }
 
 
-// The entry hook is a "BumpSystemStackPointer" instruction (sub), followed by
-// a "Push lr" instruction, followed by a call.
-static const unsigned int kProfileEntryHookCallSize =
-    Assembler::kCallSizeWithRelocation + (2 * kInstructionSize);
+static unsigned int GetProfileEntryHookCallSize(MacroAssembler* masm) {
+  // The entry hook is a "BumpSystemStackPointer" instruction (sub),
+  // followed by a "Push lr" instruction, followed by a call.
+  unsigned int size =
+      Assembler::kCallSizeWithRelocation + (2 * kInstructionSize);
+  if (CpuFeatures::IsSupported(ALWAYS_ALIGN_CSP)) {
+    // If ALWAYS_ALIGN_CSP then there will be an extra bic instruction in
+    // "BumpSystemStackPointer".
+    size += kInstructionSize;
+  }
+  return size;
+}
 
 
 void ProfileEntryHookStub::MaybeCallEntryHook(MacroAssembler* masm) {
   if (masm->isolate()->function_entry_hook() != NULL) {
     ProfileEntryHookStub stub(masm->isolate());
     Assembler::BlockConstPoolScope no_const_pools(masm);
+    DontEmitDebugCodeScope no_debug_code(masm);
     Label entry_hook_call_start;
     __ Bind(&entry_hook_call_start);
     __ Push(lr);
     __ CallStub(&stub);
     ASSERT(masm->SizeOfCodeGeneratedSince(&entry_hook_call_start) ==
-           kProfileEntryHookCallSize);
+           GetProfileEntryHookCallSize(masm));
 
     __ Pop(lr);
   }
@@ -4694,7 +4772,7 @@ void ProfileEntryHookStub::Generate(MacroAssembler* masm) {
   const int kNumSavedRegs = kCallerSaved.Count();
 
   // Compute the function's address as the first argument.
-  __ Sub(x0, lr, kProfileEntryHookCallSize);
+  __ Sub(x0, lr, GetProfileEntryHookCallSize(masm));
 
 #if V8_HOST_ARCH_ARM64
   uintptr_t entry_hook =

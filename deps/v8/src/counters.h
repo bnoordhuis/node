@@ -5,11 +5,11 @@
 #ifndef V8_COUNTERS_H_
 #define V8_COUNTERS_H_
 
-#include "../include/v8.h"
-#include "allocation.h"
-#include "objects.h"
-#include "platform/elapsed-timer.h"
-#include "v8globals.h"
+#include "include/v8.h"
+#include "src/allocation.h"
+#include "src/globals.h"
+#include "src/objects.h"
+#include "src/platform/elapsed-timer.h"
 
 namespace v8 {
 namespace internal {
@@ -143,6 +143,9 @@ class StatsCounter {
     return loc;
   }
 
+  // Reset the cached internal pointer.
+  void Reset() { lookup_done_ = false; }
+
  protected:
   // Returns the cached address of this counter location.
   int* GetPtr() {
@@ -265,11 +268,12 @@ class HistogramTimerScope BASE_EMBEDDED {
     } else {
       timer_->Start();
     }
+  }
 #else
       : timer_(timer) {
     timer_->Start();
-#endif
   }
+#endif
   ~HistogramTimerScope() {
 #ifdef DEBUG
     if (!skipped_timer_start_) {
@@ -279,6 +283,7 @@ class HistogramTimerScope BASE_EMBEDDED {
     timer_->Stop();
 #endif
   }
+
  private:
   HistogramTimer* timer_;
 #ifdef DEBUG
@@ -379,6 +384,7 @@ class HistogramTimerScope BASE_EMBEDDED {
   SC(call_premonomorphic_stubs, V8.CallPreMonomorphicStubs)           \
   SC(call_normal_stubs, V8.CallNormalStubs)                           \
   SC(call_megamorphic_stubs, V8.CallMegamorphicStubs)                 \
+  SC(inlined_copied_elements, V8.InlinedCopiedElements)              \
   SC(arguments_adaptors, V8.ArgumentsAdaptors)                        \
   SC(compilation_cache_hits, V8.CompilationCacheHits)                 \
   SC(compilation_cache_misses, V8.CompilationCacheMisses)             \
@@ -626,6 +632,7 @@ class Counters {
     stats_counter_count
   };
 
+  void ResetCounters();
   void ResetHistograms();
 
  private:
