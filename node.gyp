@@ -347,8 +347,9 @@
             'PLATFORM="sunos"',
           ],
         }],
-        [
-          'OS=="linux" and node_shared_v8=="false"', {
+        [ 'v8_postmortem_support=="true"'
+           ' and node_shared_v8=="false"'
+           ' and OS=="linux"', {
             'ldflags': [
               '-Wl,--whole-archive <(V8_BASE) -Wl,--no-whole-archive',
             ],

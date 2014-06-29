@@ -19,10 +19,10 @@
     'conditions': [
       ['OS == "win"', {
         'os_posix': 0,
-        'v8_postmortem_support': 'false'
+        'v8_postmortem_support%': 'false'
       }, {
         'os_posix': 1,
-        'v8_postmortem_support': 'true'
+        'v8_postmortem_support%': 'true'
       }],
       ['GENERATOR == "ninja" or OS== "mac"', {
         'OBJ_DIR': '<(PRODUCT_DIR)/obj',
