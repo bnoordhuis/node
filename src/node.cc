@@ -3086,11 +3086,6 @@ static void EnableDebug(Isolate* isolate, bool wait_connect) {
   assert(debugger_running == false);
   Isolate::Scope isolate_scope(isolate);
   HandleScope handle_scope(isolate);
-  v8::Debug::SetDebugMessageDispatchHandler(DispatchMessagesDebugAgentCallback,
-                                            false);
-  debugger_running = v8::Debug::EnableAgent("node " NODE_VERSION,
-                                            debug_port,
-                                            wait_connect);
   if (debugger_running == false) {
     fprintf(stderr, "Starting debugger on port %d failed\n", debug_port);
     fflush(stderr);
@@ -3351,7 +3346,6 @@ static void DebugPause(const FunctionCallbackInfo<Value>& args) {
 
 static void DebugEnd(const FunctionCallbackInfo<Value>& args) {
   if (debugger_running) {
-    v8::Debug::DisableAgent();
     debugger_running = false;
   }
 }
