@@ -30,9 +30,9 @@ net.createServer(function() {}).listen(common.PORT);
 
 var before = 0;
 (function() {
-  // 2**26 == 64M entries
+  // 2**25 == 32M entries
   gc();
-  for (var i = 0, junk = [0]; i < 26; ++i) junk = junk.concat(junk);
+  for (var i = 0, junk = [0]; i < 25; ++i) junk = junk.concat(junk);
   before = process.memoryUsage().rss;
 
   net.createConnection(common.PORT, '127.0.0.1', function() {
