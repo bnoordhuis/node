@@ -3415,7 +3415,7 @@ void Init(int* argc,
 
   // Fetch a reference to the main isolate, so we have a reference to it
   // even when we need it to access it from another (debugger) thread.
-  node_isolate = Isolate::GetCurrent();
+  node_isolate = Isolate::New();
 
 #ifdef __POSIX__
   // Raise the open file descriptor limit.
@@ -3446,6 +3446,7 @@ void Init(int* argc,
   RegisterSignalHandler(SIGTERM, SignalExit, true);
 #endif  // __POSIX__
 
+  Isolate::Scope isolate_scope(node_isolate);
   V8::SetFatalErrorHandler(node::OnFatalError);
   V8::AddMessageListener(OnMessage);
 
@@ -3603,6 +3604,7 @@ int Start(int argc, char** argv) {
   int code;
   V8::Initialize();
   {
+    Isolate::Scope isolate_scope(node_isolate);
     Locker locker(node_isolate);
     HandleScope handle_scope(node_isolate);
     Local<Context> context = Context::New(node_isolate);
