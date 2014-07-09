@@ -87,8 +87,10 @@
       ],
 
       'sources': [
-        'src/fs_event_wrap.cc',
         'src/cares_wrap.cc',
+        'src/debugger.cc',
+        'src/debugger.h',
+        'src/fs_event_wrap.cc',
         'src/handle_wrap.cc',
         'src/node.cc',
         'src/node_buffer.cc',
@@ -428,6 +430,17 @@
               'inputs': [ 'src/perfctr_macros.py' ]
             }]
           ],
+          'action': [
+            '<(python)',
+            'tools/js2c.py',
+            '<@(_outputs)',
+            '<@(_inputs)',
+          ],
+        },
+        {
+          'action_name': 'node_js2c_debug_agent',
+          'inputs': [ 'src/debugger.js' ],
+          'outputs': [ '<(SHARED_INTERMEDIATE_DIR)/debugger-js.h' ],
           'action': [
             '<(python)',
             'tools/js2c.py',

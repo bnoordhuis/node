@@ -42,6 +42,7 @@
 #include "ares.h"
 #include "async-wrap.h"
 #include "async-wrap-inl.h"
+#include "debugger.h"
 #include "env.h"
 #include "env-inl.h"
 #include "handle_wrap.h"
@@ -141,7 +142,6 @@ bool no_deprecation = false;
 // process-relative uptime base, initialized at start-up
 static double prog_start_time;
 static bool debugger_running;
-static uv_async_t dispatch_debug_messages_async;
 
 static Isolate* node_isolate = NULL;
 
@@ -2481,18 +2481,20 @@ static Handle<Object> GetFeatures(Environment* env) {
 
 static void DebugPortGetter(Local<String> property,
                             const PropertyCallbackInfo<Value>& info) {
-  Environment* env = Environment::GetCurrent(info.GetIsolate());
-  HandleScope scope(env->isolate());
-  info.GetReturnValue().Set(debug_port);
+  Isolate* isolate = info.GetIsolate();
+  HandleScope scope(isolate);
+  Environment* env = Environment::GetCurrent(isolate);
+  info.GetReturnValue().Set(env->debugger()->port());
 }
 
 
 static void DebugPortSetter(Local<String> property,
                             Local<Value> value,
                             const PropertyCallbackInfo<void>& info) {
-  Environment* env = Environment::GetCurrent(info.GetIsolate());
-  HandleScope scope(env->isolate());
-  debug_port = value->NumberValue();
+  Isolate* isolate = info.GetIsolate();
+  HandleScope scope(isolate);
+  Environment* env = Environment::GetCurrent(isolate);
+  env->debugger()->set_port(value->Uint32Value());
 }
 
 
@@ -3075,32 +3077,18 @@ static void ParseArgs(int* argc,
 }
 
 
-// Called from V8 Debug Agent TCP thread.
-static void DispatchMessagesDebugAgentCallback() {
-  uv_async_send(&dispatch_debug_messages_async);
-}
-
-
 // Called from the main thread.
-static void EnableDebug(Isolate* isolate, bool wait_connect) {
-  assert(debugger_running == false);
-  Isolate::Scope isolate_scope(isolate);
-  HandleScope handle_scope(isolate);
+static void EnableDebug(Environment* env, bool wait_connect) {
+  CHECK_EQ(false, debugger_running);
+  HandleScope handle_scope(env->isolate());
+  const int errorno = env->debugger()->Start();
+  debugger_running = (errorno == 0);
   if (debugger_running == false) {
-    fprintf(stderr, "Starting debugger on port %d failed\n", debug_port);
+    fprintf(stderr, "Problem starting debugger: %s\n", ::uv_strerror(errorno));
     fflush(stderr);
     return;
   }
-  fprintf(stderr, "Debugger listening on port %d\n", debug_port);
-  fflush(stderr);
-
-  Environment* env = Environment::GetCurrentChecked(isolate);
-  if (env == NULL)
-    return;  // Still starting up.
-
-  // Assign environment to the debugger's context
-  env->AssignToContext(v8::Debug::GetDebugContext());
-
+  if (wait_connect == true) Debugger::Break(env->isolate());
   Context::Scope context_scope(env->context());
   Local<Object> message = Object::New(env->isolate());
   message->Set(FIXED_ONE_BYTE_STRING(env->isolate(), "cmd"),
@@ -3110,17 +3098,6 @@ static void EnableDebug(Isolate* isolate, bool wait_connect) {
     message
   };
   MakeCallback(env, env->process_object(), "emit", ARRAY_SIZE(argv), argv);
-}
-
-
-// Called from the main thread.
-static void DispatchDebugMessagesAsyncCallback(uv_async_t* handle) {
-  if (debugger_running == false) {
-    fprintf(stderr, "Starting debugger agent.\n");
-    EnableDebug(node_isolate, false);
-  }
-  Isolate::Scope isolate_scope(node_isolate);
-  v8::Debug::ProcessDebugMessages();
 }
 
 
@@ -3142,9 +3119,7 @@ static void InstallEarlyDebugSignalHandler() {
 
 
 static void EnableDebugSignalHandler(int signo) {
-  // Call only async signal-safe functions here!
-  v8::Debug::DebugBreak(*static_cast<Isolate* volatile*>(&node_isolate));
-  uv_async_send(&dispatch_debug_messages_async);
+  Debugger::Break(*static_cast<Isolate* volatile*>(&node_isolate));
 }
 
 
@@ -3193,8 +3168,7 @@ static int RegisterDebugSignalHandler() {
 
 #ifdef _WIN32
 DWORD WINAPI EnableDebugThreadProc(void* arg) {
-  v8::Debug::DebugBreak(*static_cast<Isolate* volatile*>(&node_isolate));
-  uv_async_send(&dispatch_debug_messages_async);
+  Debugger::Break(*static_cast<Isolate* volatile*>(&node_isolate));
   return 0;
 }
 
@@ -3340,7 +3314,7 @@ static void DebugProcess(const FunctionCallbackInfo<Value>& args) {
 
 
 static void DebugPause(const FunctionCallbackInfo<Value>& args) {
-  v8::Debug::DebugBreak(args.GetIsolate());
+  Debugger::Break(args.GetIsolate());
 }
 
 
@@ -3360,13 +3334,6 @@ void Init(int* argc,
 
   // Make inherited handles noninheritable.
   uv_disable_stdio_inheritance();
-
-  // init async debug messages dispatching
-  // FIXME(bnoordhuis) Should be per-isolate or per-context, not global.
-  uv_async_init(uv_default_loop(),
-                &dispatch_debug_messages_async,
-                DispatchDebugMessagesAsyncCallback);
-  uv_unref(reinterpret_cast<uv_handle_t*>(&dispatch_debug_messages_async));
 
 #if defined(NODE_V8_OPTIONS)
   // Should come before the call to V8::SetFlagsFromCommandLine()
@@ -3449,13 +3416,6 @@ void Init(int* argc,
   Isolate::Scope isolate_scope(node_isolate);
   V8::SetFatalErrorHandler(node::OnFatalError);
   V8::AddMessageListener(OnMessage);
-
-  // If the --debug flag was specified then initialize the debug thread.
-  if (use_debug_agent) {
-    EnableDebug(node_isolate, debug_wait_connect);
-  } else {
-    RegisterDebugSignalHandler();
-  }
 }
 
 
@@ -3610,15 +3570,12 @@ int Start(int argc, char** argv) {
     Local<Context> context = Context::New(node_isolate);
     Environment* env = CreateEnvironment(
         node_isolate, context, argc, argv, exec_argc, exec_argv);
-    // Assign env to the debugger's context
-    if (debugger_running) {
-      HandleScope scope(env->isolate());
-      env->AssignToContext(v8::Debug::GetDebugContext());
-    }
-    // This Context::Scope is here so EnableDebug() can look up the current
-    // environment with Environment::GetCurrentChecked().
-    // TODO(bnoordhuis) Reorder the debugger initialization logic so it can
-    // be removed.
+    env->debugger()->set_port(debug_port);
+    // If the --debug flag was specified then initialize the debug thread.
+    if (use_debug_agent)
+      EnableDebug(env, debug_wait_connect);
+    else
+      RegisterDebugSignalHandler();
     {
       Context::Scope context_scope(env->context());
       bool more;

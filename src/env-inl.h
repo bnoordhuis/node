@@ -94,6 +94,7 @@ inline void Environment::IsolateData::Put() {
 inline Environment::IsolateData::IsolateData(v8::Isolate* isolate)
     : event_loop_(uv_default_loop()),
       isolate_(isolate),
+      debugger_(isolate),
 #define V(PropertyName, StringValue)                                          \
     PropertyName ## _(isolate, FIXED_ONE_BYTE_STRING(isolate, StringValue)),
     PER_ISOLATE_STRING_PROPERTIES(V)
@@ -108,6 +109,11 @@ inline uv_loop_t* Environment::IsolateData::event_loop() const {
 
 inline v8::Isolate* Environment::IsolateData::isolate() const {
   return isolate_;
+}
+
+inline Debugger* Environment::IsolateData::debugger() const {
+  // The const_cast is okay, it doesn't violate conceptual const-ness.
+  return const_cast<Debugger*>(&debugger_);
 }
 
 inline Environment::AsyncListener::AsyncListener() {
@@ -256,6 +262,10 @@ inline void Environment::Dispose() {
 
 inline v8::Isolate* Environment::isolate() const {
   return isolate_;
+}
+
+inline Debugger* Environment::debugger() const {
+  return isolate_data()->debugger();
 }
 
 inline bool Environment::has_async_listener() const {

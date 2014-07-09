@@ -23,6 +23,7 @@
 #define SRC_ENV_H_
 
 #include "ares.h"
+#include "debugger.h"
 #include "tree.h"
 #include "util.h"
 #include "uv.h"
@@ -366,6 +367,8 @@ class Environment {
 
   inline v8::Isolate* isolate() const;
   inline uv_loop_t* event_loop() const;
+  inline Debugger* debugger() const;  // Per-isolate property.
+
   inline bool has_async_listener() const;
   inline bool in_domain() const;
   inline uint32_t watched_providers() const;
@@ -492,6 +495,7 @@ class Environment {
     static inline IsolateData* GetOrCreate(v8::Isolate* isolate);
     inline void Put();
     inline uv_loop_t* event_loop() const;
+    inline Debugger* debugger() const;
 
     // Defined in src/node_profiler.cc.
     void StartGarbageCollectionTracking(Environment* env);
@@ -519,6 +523,7 @@ class Environment {
 
     uv_loop_t* const event_loop_;
     v8::Isolate* const isolate_;
+    Debugger debugger_;
 
 #define V(PropertyName, StringValue)                                          \
     v8::Eternal<v8::String> PropertyName ## _;
