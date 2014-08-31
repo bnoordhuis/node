@@ -68,6 +68,11 @@ inline AsyncWrap::AsyncWrap(Environment* env,
   v8::TryCatch try_catch;
   try_catch.SetVerbose(true);
 
+  // (refack) my twisted take on uid
+  char tmp_id[20];
+  itoa((size_t)*object, tmp_id, 16);
+  object->Set(OneByteString(env->isolate(), "_uid"), OneByteString(env->isolate(), tmp_id));
+
   v8::Local<v8::Value> val = object.As<v8::Value>();
   env->async_listener_run_function()->Call(env->process_object(), 1, &val);
 
